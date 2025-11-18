@@ -255,7 +255,6 @@ void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, cons
 
 void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, Server *server) {
 	ResolvedAction	action;
-	(void)client_fd; // remove later
 	// if (req.getMethod() == "GET") {
 	// 	action = resolveRequestToAction(serv_cfg, req.getPath());
 	// 	switch (action.type) {
@@ -335,6 +334,7 @@ void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int 
 				std::cout << "execve error" << std::endl;
 				std::cout << strerror(errno) << std::endl;
 			}
+			exit(1);
 		}
 		else {
 			close(serv_to_cgi[0]);
@@ -346,8 +346,8 @@ void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int 
 					std::cout << "fcntl" << std::endl;
 					resolveErrorAction(500, serv_cfg);
 				}
-			if (!server->epoll_add_cgi(serv_to_cgi[1], EPOLLIN) ||
-				!server->epoll_add_cgi(cgi_to_serv[0], EPOLLOUT)) {
+			std::pair<int, int> cgi_fds = std::make_pair(cgi_to_serv[0], serv_to_cgi[1]);
+			if (!server->epoll_add_cgi(cgi_fds, client_fd)) {
 					std::cout << "epoll_add_cgi" << std::endl;
 					resolveErrorAction(500, serv_cfg);
 				}

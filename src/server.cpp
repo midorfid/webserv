@@ -155,24 +155,33 @@ void	Server::run_event_loop(epoll_event *ev) {
 				}
 			}
 			else {
-				handle_client_event(conn_sock);
+				handle_client_event(events[i].data.fd);
 			}
 		}
 	}
 }
 
 bool
-Server::epoll_add_cgi(int cgi_sock, uint32_t events_io_flag) {
+Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_sock) {
 	epoll_event	ev;
 
-	ev.events = events_io_flag;
-	ev.data.fd = cgi_sock;
+	ev.events = EPOLLIN;
+	ev.data.fd = client_sock;
 
-	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_sock, &ev) == -1) {
-		fprintf(stderr, "epoll_ctl (conn_sock): %s\n", strerror(errno));
-		close(cgi_sock);
+	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_fds.first, &ev) == -1) {
+		fprintf(stderr, "epoll_ctl (cgi read sock): %s\n", strerror(errno));
+		close(cgi_fds.first);
 		return false;
 	}
+
+	ev.events = EPOLLOUT;
+
+	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_fds.second, &ev) == -1) {
+		fprintf(stderr, "epoll_ctl (cgi write sock): %s\n", strerror(errno));
+		close(cgi_fds.second);
+		return false;
+	}
+	_client_cgi[client_sock] = cgi_fds;
 
 	return true;
 }
@@ -239,12 +248,44 @@ Server::handle_client_event(int client_fd) {
 	try {
 		Client &client = _clients.at(client_fd);
 
-		client.processNewData(this);
-	
-		if (client.ready()) {
-			_handler.handle(_config, client.req(), client_fd, this);
-	
-			client.reset();
+		if (_client_cgi.find(client_fd) == _client_cgi.end()) {
+			client.processNewData(this);
+			
+			if (client.ready()) {
+				_handler.handle(_config, client.req(), client_fd, this);
+			
+				client.reset();
+			}
+		}
+		else {
+			
+			int &cgi_read = _client_cgi[client_fd].first;
+			int &cgi_write = _client_cgi[client_fd].second;
+			
+			char buf[4096];
+			ssize_t bytes_read = read(cgi_read, buf, 4096);
+			std::cout << "bytes read: " << bytes_read << std::endl;
+			std::cout << buf << std::endl; //               HERE prints "script path: /workspaces/webserv2.0/www", bytes read 40 ERROR TODO
+			if (bytes_read == -1) {
+				std::cout << "pupupu" << std::endl;
+			}
+			else {
+				ssize_t total_sent;
+				ssize_t to_send;
+
+				total_sent = 0;
+				to_send = sizeof(buf);
+				while (total_sent < to_send) {
+					ssize_t sent = send(client_fd, buf + total_sent, to_send - total_sent, 0);
+					if (sent == -1) {
+						throw std::runtime_error("Error sending response");
+					}
+					total_sent += sent;
+				}
+				epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, cgi_read, NULL);
+				epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, cgi_write, NULL);
+				disconnect_client(client_fd);
+			}
 		}
 	}
 	catch(const std::exception& e)

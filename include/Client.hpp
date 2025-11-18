@@ -3,12 +3,14 @@
 #include <string>
 #include "httpRequest.hpp"
 #include "ParseRequest.hpp"
+#include "cgi.hpp"
 
 class Server;
 
 class Client {
 	public:
-
+	
+	Client(int sock_fd);
 	Client();
 	Client(std::string &, std::string &, int sock_fd);
 	~Client();
@@ -38,5 +40,4 @@ class Client {
         int				_keep_alive_timer;
         ParseRequest    _parser;
 		HttpRequest     _req;
-
 };
