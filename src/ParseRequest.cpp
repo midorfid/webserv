@@ -108,6 +108,10 @@ void		ParseRequest::trimLeftWhitespace(std::string &to_trim) {
 void		ParseRequest::parseFirstLine(std::string &_current_line, HttpRequest &req) {
 	std::vector<std::string> first_line = tokenizeFirstLine(_current_line);
 
+	for (const auto & str : first_line)
+		std::cout << str << " ";
+	std::cout << std::endl;
+
 	parseMethod(first_line[0], req);
 	parsePathAndQuery(first_line[1], req);
 	parseHttpVer(first_line[2], req);
@@ -143,6 +147,7 @@ ParseRequest::ParseResult ParseRequest::parse(const std::string &raw_request, Ht
 	std::string				reqNoBody;
 	size_t					eoh_pos;
 
+	std::cout << "qq";
 	eoh_pos = raw_request.find(EOH);
 	if (eoh_pos == raw_request.npos)
 		return ParsingIncomplete;

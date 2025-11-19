@@ -111,7 +111,45 @@ void	Server::init_epoll(epoll_event *ev) {
 		exit(EXIT_FAILURE);
 	}
 }
+void 
+Server::handle_cgi_write(int write_fd) {
+	// int &client_fd = _cgi_client[write_fd];
+	std::cout << "cgi write_fd:" << write_fd << std::endl;
 
+	epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, write_fd, NULL);
+	_cgi_client.erase(write_fd);
+}
+void
+Server::handle_cgi_read(int read_fd) {
+	int &client_fd = _cgi_client[read_fd];
+	
+	std::cout << "cgi read_fd:" << read_fd << std::endl;
+	char buf[4096];
+	ssize_t bytes_read = read(read_fd, buf, 4096);
+	std::cout << "bytes read: " << bytes_read << std::endl;
+	std::cout << buf << std::endl; //               HERE prints "script path: /workspaces/webserv2.0/www", bytes read 40 ERROR TODO
+	if (bytes_read == -1) {
+		std::cout << "pupupu" << std::endl;
+	}
+	else {
+		ssize_t total_sent;
+
+		total_sent = 0;
+		std::cout << "client fd: " << client_fd << std::endl;
+		while (total_sent < bytes_read) {
+			ssize_t sent = send(client_fd, buf + total_sent, bytes_read - total_sent, 0);
+			if (sent == -1) {
+				throw std::runtime_error("Error sending response");
+			}
+			total_sent += sent;
+		}
+		std::cout << "bytes sent: " << total_sent << std::endl;
+
+		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
+		_cgi_client.erase(read_fd);
+		// disconnect_client(client_fd);
+	}
+}
 void	Server::run_event_loop(epoll_event *ev) {
 	int                 	conn_sock, nfds;
 	struct epoll_event		events[MAX_EVENTS];
@@ -123,6 +161,7 @@ void	Server::run_event_loop(epoll_event *ev) {
 			exit(EXIT_FAILURE);
 		}
 		for (int i = 0; i < nfds; ++i) {
+			std::cout << "imp:" << events[i].data.fd << std::endl;
 			if (events[i].data.fd == this->_listen_sock) {
 				struct	sockaddr_storage	client_addr;
 				socklen_t	clientaddr_len = sizeof(client_addr);
@@ -154,6 +193,13 @@ void	Server::run_event_loop(epoll_event *ev) {
 					std::cout << "New connection on fd " << conn_sock << std::endl;
 				}
 			}
+			else if (_cgi_client[events[i].data.fd]) {
+				if (events[i].events & EPOLLIN)
+					handle_cgi_read(events[i].data.fd);
+				if (events[i].events & EPOLLOUT)
+					handle_cgi_write(events[i].data.fd);
+				// clear?
+			}
 			else {
 				handle_client_event(events[i].data.fd);
 			}
@@ -162,11 +208,11 @@ void	Server::run_event_loop(epoll_event *ev) {
 }
 
 bool
-Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_sock) {
+Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
 	epoll_event	ev;
 
 	ev.events = EPOLLIN;
-	ev.data.fd = client_sock;
+	ev.data.fd = cgi_fds.first;
 
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_fds.first, &ev) == -1) {
 		fprintf(stderr, "epoll_ctl (cgi read sock): %s\n", strerror(errno));
@@ -175,13 +221,16 @@ Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_sock) {
 	}
 
 	ev.events = EPOLLOUT;
+	ev.data.fd = cgi_fds.second;
 
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_fds.second, &ev) == -1) {
 		fprintf(stderr, "epoll_ctl (cgi write sock): %s\n", strerror(errno));
 		close(cgi_fds.second);
 		return false;
 	}
-	_client_cgi[client_sock] = cgi_fds;
+	std::cout << client_fd << std::endl;
+	_cgi_client[cgi_fds.first] = client_fd;
+	_cgi_client[cgi_fds.second] = client_fd;
 
 	return true;
 }
@@ -248,44 +297,12 @@ Server::handle_client_event(int client_fd) {
 	try {
 		Client &client = _clients.at(client_fd);
 
-		if (_client_cgi.find(client_fd) == _client_cgi.end()) {
-			client.processNewData(this);
-			
-			if (client.ready()) {
-				_handler.handle(_config, client.req(), client_fd, this);
-			
-				client.reset();
-			}
-		}
-		else {
-			
-			int &cgi_read = _client_cgi[client_fd].first;
-			int &cgi_write = _client_cgi[client_fd].second;
-			
-			char buf[4096];
-			ssize_t bytes_read = read(cgi_read, buf, 4096);
-			std::cout << "bytes read: " << bytes_read << std::endl;
-			std::cout << buf << std::endl; //               HERE prints "script path: /workspaces/webserv2.0/www", bytes read 40 ERROR TODO
-			if (bytes_read == -1) {
-				std::cout << "pupupu" << std::endl;
-			}
-			else {
-				ssize_t total_sent;
-				ssize_t to_send;
-
-				total_sent = 0;
-				to_send = sizeof(buf);
-				while (total_sent < to_send) {
-					ssize_t sent = send(client_fd, buf + total_sent, to_send - total_sent, 0);
-					if (sent == -1) {
-						throw std::runtime_error("Error sending response");
-					}
-					total_sent += sent;
-				}
-				epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, cgi_read, NULL);
-				epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, cgi_write, NULL);
-				disconnect_client(client_fd);
-			}
+		client.processNewData(this);
+		
+		if (client.ready()) {
+			_handler.handle(_config, client.req(), client_fd, this);
+		
+			client.reset();
 		}
 	}
 	catch(const std::exception& e)

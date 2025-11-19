@@ -27,12 +27,12 @@ void ParseConfig::parse(const std::string &cfg_path, Config &config) {
 	syntaxCheck();
 	parseBlock(config);
 	std::vector<Location> loc = config.getLocations();
-	for (Location l : loc) {
-		std::cout << "Location path: " << l.getPath() << std::endl;
-		std::string root;
-		l.getDirective("root", root);
-		std::cout << "root:" << root << std::endl;
-	}
+	// for (Location l : loc) {
+	// 	std::cout << "Location path: " << l.getPath() << std::endl;
+	// 	std::string root;
+	// 	l.getDirective("root", root);
+	// 	std::cout << "root:" << root << std::endl;
+	// }
 }
 
 // void		ParseConfig::parseServers() {

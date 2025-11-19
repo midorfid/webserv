@@ -32,9 +32,11 @@ class Server {
         Config                                  _config;
         ParseConfig				                _ConfigParser;
         RequestHandler                          _handler;
-        std::map<int, std::pair<int, int> >     _client_cgi;
+        std::map<int, int>                      _cgi_client;
         
         
+        void            handle_cgi_write(int pipe_fd);
+        void            handle_cgi_read(int pipe_fd);
         std::string		generate_response(Client &client);
         void    		init_epoll(epoll_event *ev);
         void    		init_sockets(const char *port);

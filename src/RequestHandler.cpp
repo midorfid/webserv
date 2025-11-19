@@ -143,6 +143,8 @@ bool RequestHandler::normalizePath(std::string &phys_path) {
 		std::cout << "errno: " << strerror(errno) << std::endl;
 		return false;
 	}
+	phys_path.erase(phys_path.length()-1); // double "//" change later TODO
+	std::cout << "normalized path:" << phys_path << "q" << std::endl;
 	// handle if request is outside of var/www/ directory TODO
 	phys_path = actual_path;
 	return true;
@@ -297,7 +299,6 @@ void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int 
 			std::cout << "pipe" << std::endl;
 			resolveErrorAction(500, serv_cfg);
 		}
-		std::cout << "before fork" << std::endl;
 		cpid = fork();
 		if (cpid == -1) {
 			std::cout << "fork" << std::endl;
@@ -307,7 +308,6 @@ void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int 
 			close(cgi_to_serv[0]);
 			close(serv_to_cgi[1]);
 
-			std::cout << "child" << std::endl;
 			if (dup2(serv_to_cgi[0], STDIN_FILENO) == -1) {
 				std::cout << "dup2" << std::endl;
 				resolveErrorAction(500, serv_cfg);
@@ -325,14 +325,13 @@ void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int 
 			envp_builder.build();
 
 			char *intep = const_cast<char*>("/usr/bin/python3");
-			char *program = const_cast<char*>("../CGI_script/script.py");
+			char *program = const_cast<char*>("../www/script.py");
 
 			char *const argv[] = {intep, program, NULL};
-
-			std::cout << "script path: " << scriptPhysAddr << std::endl;
+			std::cerr << "script path: " << scriptPhysAddr << std::endl;
 			if (execve(program, argv, envp_builder.getEnvp()) == -1) {
-				std::cout << "execve error" << std::endl;
-				std::cout << strerror(errno) << std::endl;
+				std::cerr << "execve error" << std::endl;
+				std::cerr << strerror(errno) << std::endl;
 			}
 			exit(1);
 		}
@@ -340,7 +339,6 @@ void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int 
 			close(serv_to_cgi[0]);
 			close(cgi_to_serv[1]);
 			
-			std::cout << "parent" << std::endl;
 			if (fcntl(serv_to_cgi[1], F_SETFL, O_NONBLOCK) == -1 ||
 				fcntl(cgi_to_serv[0], F_SETFL, O_NONBLOCK) == -1) {
 					std::cout << "fcntl" << std::endl;
