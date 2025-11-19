@@ -93,3 +93,5 @@ Client::reset() {
 Client::Client(std::string &ip, std::string &port, int sock_fd) : _ip_string(ip), _port(port), _sock_fd(sock_fd), _is_ready(false) {
     std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
 }
+
+Client::Client(int sock_fd) : _sock_fd(sock_fd) {}

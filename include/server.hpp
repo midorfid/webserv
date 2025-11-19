@@ -21,19 +21,22 @@ class Server {
         const std::string       				&port() const;
         std::pair<std::string, std::string>		getClientAddr(struct sockaddr_storage &client_addr);
 
-        bool                                    epoll_add_cgi(int cgi_sock, uint32_t events_io_flag);
+        bool                                    epoll_add_cgi(std::pair<int, int> cgi_fds, int client_fd);
 
     private:
 
-        std::string             _port;
-        int                     _listen_sock;
-        int                     _epoll_fd;
-        std::map<int, Client>   _clients;
-        Config                  _config;
-        ParseConfig				_ConfigParser;
-        RequestHandler          _handler;
-
+        std::string                             _port;
+        int                                     _listen_sock;
+        int                                     _epoll_fd;
+        std::map<int, Client>                   _clients;
+        Config                                  _config;
+        ParseConfig				                _ConfigParser;
+        RequestHandler                          _handler;
+        std::map<int, int>                      _cgi_client;
         
+        
+        void            handle_cgi_write(int pipe_fd);
+        void            handle_cgi_read(int pipe_fd);
         std::string		generate_response(Client &client);
         void    		init_epoll(epoll_event *ev);
         void    		init_sockets(const char *port);

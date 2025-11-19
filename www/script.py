@@ -18,6 +18,7 @@ def body():
 	return body
 
 payload = body()
+print("HTTP/1.1 200 OK")
 print("Content-Type: text/html")
 print("Content-Length:", len(payload))
 print("")
