@@ -44,6 +44,7 @@ void Server::run(const std::string &cfg_file) {
 	struct epoll_event		ev;
 
 	_ConfigParser.parse(cfg_file, this->_config);
+	_config.setLocCgi();
 
 	if (this->_config.getPort("listen", _port)) {
 		this->init_sockets(_port.c_str());
@@ -228,7 +229,7 @@ Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
 		close(cgi_fds.second);
 		return false;
 	}
-	std::cout << client_fd << std::endl;
+	
 	_cgi_client[cgi_fds.first] = client_fd;
 	_cgi_client[cgi_fds.second] = client_fd;
 
@@ -300,9 +301,13 @@ Server::handle_client_event(int client_fd) {
 		client.processNewData(this);
 		
 		if (client.ready()) {
-			_handler.handle(_config, client.req(), client_fd, this);
-		
-			client.reset();
+			_handler.handle(_config, client.req(), client_fd, client.cgi_state());
+			const CgiInfo &cgi = client.cgi_state();
+			if (cgi.isCgi()) {
+				epoll_add_cgi(std::make_pair(cgi.getReadfd(), cgi.getWritefd()), client_fd);
+			}
+			else
+				client.reset(); // dunno when to reset yet TODO
 		}
 	}
 	catch(const std::exception& e)

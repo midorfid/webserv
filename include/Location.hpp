@@ -32,4 +32,5 @@ class Location : public AConfigBlock {
 
 		std::string							_path;
 		limitExceptRules					_rules;
+
 };

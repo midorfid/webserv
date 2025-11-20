@@ -27,10 +27,10 @@ class Client {
 	bool				ready() const;
 	std::string const	&port() const;
 	void				reset();
+	CgiInfo				&cgi_state();
 
 	private:
 	
-		
 		std::string		_ip_string;
 		std::string		_port;
 		int				_sock_fd;
@@ -40,4 +40,5 @@ class Client {
         int				_keep_alive_timer;
         ParseRequest    _parser;
 		HttpRequest     _req;
+		CgiInfo			_cgi_state;
 };

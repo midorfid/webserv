@@ -18,6 +18,7 @@ class Config : public AConfigBlock {
 		bool   							checkIfDuplicate(const std::string &path) const;
 		bool							getPort(const std::string &key, std::string &out_val) const;
 
+		void						setLocCgi();
 		bool						getErrorPage(int code, std::string &errorPage) const;
 		Location					&getNewLocation();
 	private:

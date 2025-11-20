@@ -10,7 +10,7 @@ class HttpRequest;
 class Environment {
     public:
 
-        Environment(const HttpRequest &req, const Server &server);
+        Environment(const HttpRequest &req);
         ~Environment();
 
         Environment &operator=(const Environment &other);
@@ -32,7 +32,6 @@ class Environment {
         friend int main(int, char **, char **);
 
         const HttpRequest           &_req;
-        const Server                &_server;
         // const Location				&_loc;
         std::vector<std::string>    _vsenv;
         char                        **_cenv;

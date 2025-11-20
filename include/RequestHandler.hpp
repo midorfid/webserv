@@ -4,6 +4,7 @@
 #include "httpRequest.hpp"
 #include "Config.hpp"
 #include "ResolvedAction.hpp"
+#include "cgi.hpp"
 
 class Server;
 
@@ -15,15 +16,16 @@ class RequestHandler {
 		RequestHandler(const RequestHandler &other);
 		RequestHandler &operator=(const RequestHandler &other);
 		
-		void		handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, Server *server);
+		void		handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, CgiInfo &state);
 		
 	private:
 
+		ResolvedAction		resolveCgiScript(const Location *loc, const Config &serv_cfg, const HttpRequest &req);
 		std::string			getHttpDate();
 		const Location		*findBestLocationMatch(const Config &serv_cfg, const std::string &url);
 		bool				normalizePath(std::string &phys_path);
 		std::string			handlePath(const Config &serv_cfg, HttpRequest &req);
-		ResolvedAction		resolveRequestToAction(const Config &serv_cfg, const std::string &req_path);
+		ResolvedAction		resolveRequestToAction(const Config &serv_cfg, const HttpRequest &req);
 		ResolvedAction		checkReqPath(const std::string &path, const Config &cfg, const Location *location);
 		ResolvedAction		resolveErrorAction(int error_code, const Config &serv_cfg);
 		ResolvedAction		resolveFileAction(const std::string &path, struct stat *st);

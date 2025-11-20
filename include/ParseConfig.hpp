@@ -18,6 +18,7 @@ class ParseConfig : public AParser {
 
 	private:
 	
+		void										finalizeLocations(std::vector<Location> &loc);
 		void										parseServers();
 		void										parseBlock(AConfigBlock &block);
 		int											checkPath(const std::string &path); // return TODO
