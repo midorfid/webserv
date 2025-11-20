@@ -12,8 +12,9 @@ enum ActionType {
 };
 
 struct ResolvedAction {
-	ActionType	type;
-	std::string	target_path;
-	int			status_code;
-	struct stat st;
+	ActionType			type;
+	std::string			target_path;
+	int					status_code;
+	struct stat 		st;
+	std::pair<int,int>	cgi_fds;
 };

@@ -55,8 +55,13 @@ bool Config::getPort(const std::string &key, std::string &out_val) const {
 	return true;
 }
 
-// void
-// Config::port
+void
+Config::setLocCgi() {
+    for (size_t i = 0; i < getLocations().size(); ++i) {
+        _locations[i].setCgi();
+    }
+    this->setCgi();
+}
 
 Location					&Config::getNewLocation() {
     _locations.push_back(Location());

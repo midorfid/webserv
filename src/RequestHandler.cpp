@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include "server.hpp"
 #include "Environment.hpp"
+#include "StringUtils.hpp"
 
 #define SBUF 4096
 
@@ -255,103 +256,106 @@ void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, cons
 	sendString(client_fd, html_body);
 }
 
-void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, Server *server) {
+ResolvedAction
+RequestHandler::resolveCgiScript(const Location *loc, const Config &serv_cfg, const HttpRequest &req) {
+	std::string root_path;
+
+	loc->getDirective("root", root_path);
+	std::string scriptPhysAddr = root_path + req.getPath(); // query?? TODO
+
+	if (normalizePath(scriptPhysAddr) == false)
+		resolveErrorAction(404, serv_cfg);
+
+	struct stat st;
+
+	if (stat(scriptPhysAddr.c_str(), &st) != 0) {
+		std::cerr << "script stat() failed :(" << std::endl;
+		resolveErrorAction(403, serv_cfg);
+	}
+	pid_t	cpid;
+	int		serv_to_cgi[2];
+	int		cgi_to_serv[2];
+
+	if (pipe(serv_to_cgi) == -1 || pipe(cgi_to_serv) == -1) {
+		std::cerr << "pipe" << std::endl;
+		resolveErrorAction(500, serv_cfg);
+	}
+	cpid = fork();
+	if (cpid == -1) {
+		std::cerr << "fork" << std::endl;
+		resolveErrorAction(500, serv_cfg);
+	}
+	if (cpid == 0) {
+		close(cgi_to_serv[0]);
+		close(serv_to_cgi[1]);
+
+		if (dup2(serv_to_cgi[0], STDIN_FILENO) == -1) {
+			std::cerr << "dup2" << std::endl;
+			resolveErrorAction(500, serv_cfg);
+		}
+		if (dup2(cgi_to_serv[1], STDOUT_FILENO) == -1) {
+			std::cerr << "dup2" << std::endl;
+			resolveErrorAction(500, serv_cfg);
+		}
+
+		close(cgi_to_serv[1]);
+		close(serv_to_cgi[0]);
+
+		Environment	envp_builder(req);
+
+		envp_builder.build();
+
+		char *intep = const_cast<char*>("/usr/bin/python3"); // TODO hardcoded change!
+		char *program = const_cast<char*>("../www/script.py");
+
+		char *const argv[] = {intep, program, NULL};
+		std::cerr << "script path: " << scriptPhysAddr << std::endl;
+		if (execve(program, argv, envp_builder.getEnvp()) == -1) {
+			std::cerr << "execve error" << std::endl;
+			std::cerr << strerror(errno) << std::endl;
+		}
+		exit(1);
+	}
+	else {
+		close(serv_to_cgi[0]);
+		close(cgi_to_serv[1]);
+		
+		if (fcntl(serv_to_cgi[1], F_SETFL, O_NONBLOCK) == -1 ||
+			fcntl(cgi_to_serv[0], F_SETFL, O_NONBLOCK) == -1) {
+				std::cerr << "fcntl" << std::endl;
+				resolveErrorAction(500, serv_cfg);
+		}
+		
+		ResolvedAction	action;
+		
+		action.st = st;
+		action.type = ACTION_CGI;
+		action.status_code = 200;
+		action.target_path = scriptPhysAddr;
+		action.cgi_fds.first = cgi_to_serv[0];
+		action.cgi_fds.second = serv_to_cgi[1];
+
+		// close(serv_to_cgi[1]);
+		// close(cgi_to_serv[0]);
+		return action;
+	}
+}
+
+void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, CgiInfo &state) {
 	ResolvedAction	action;
-	// if (req.getMethod() == "GET") {
-	// 	action = resolveRequestToAction(serv_cfg, req.getPath());
-	// 	switch (action.type) {
-	// 		case ACTION_SERVE_FILE:
-	// 			return sendFile(action, client_fd);
-	// 		case ACTION_GENERATE_ERROR:
-	// 			return sendDefaultError(action.status_code, client_fd);
-	// 		case ACTION_AUTOINDEX:
-	// 			return sendDir(action.target_path, client_fd, req.getPath());
-	// 		default:
-	// 			return sendDefaultError(500, client_fd);
-	// 	}
-	// }
-	// else if (req.getMethod() == "POST" && req.getHeader("content-type") == "image/png") {
-		// for now only does CGI, TODO
-	{
-		const Location *location = findBestLocationMatch(serv_cfg, req.getPath());
-		if (location == NULL) {
-			resolveErrorAction(404, serv_cfg);
-		}
-		std::string script_type;
-		location->getDirective("allow_cgi", script_type);
-		if (script_type != ".py")
-			resolveErrorAction(404, serv_cfg);
-		std::string root_path;
-		location->getDirective("root", root_path);
-		std::string scriptPhysAddr = root_path + req.getPath(); // query?? TODO
-		if (normalizePath(scriptPhysAddr) == false)
-			resolveErrorAction(404, serv_cfg);
-		struct stat st;
-		if (stat(scriptPhysAddr.c_str(), &st) != 0) {
-			std::cout << "script stat() failed :(" << std::endl;
-			resolveErrorAction(403, serv_cfg);
-		}
-		pid_t	cpid;
-		int		serv_to_cgi[2];
-		int		cgi_to_serv[2];
-
-		if (pipe(serv_to_cgi) == -1 || pipe(cgi_to_serv) == -1) {
-			std::cout << "pipe" << std::endl;
-			resolveErrorAction(500, serv_cfg);
-		}
-		cpid = fork();
-		if (cpid == -1) {
-			std::cout << "fork" << std::endl;
-			resolveErrorAction(500, serv_cfg);
-		}
-		if (cpid == 0) {
-			close(cgi_to_serv[0]);
-			close(serv_to_cgi[1]);
-
-			if (dup2(serv_to_cgi[0], STDIN_FILENO) == -1) {
-				std::cout << "dup2" << std::endl;
-				resolveErrorAction(500, serv_cfg);
-			}
-			if (dup2(cgi_to_serv[1], STDOUT_FILENO) == -1) {
-				std::cout << "dup2" << std::endl;
-				resolveErrorAction(500, serv_cfg);
-			}
-
-			close(cgi_to_serv[1]);
-			close(serv_to_cgi[0]);
-
-			Environment	envp_builder(req, *server);
-
-			envp_builder.build();
-
-			char *intep = const_cast<char*>("/usr/bin/python3");
-			char *program = const_cast<char*>("../www/script.py");
-
-			char *const argv[] = {intep, program, NULL};
-			std::cerr << "script path: " << scriptPhysAddr << std::endl;
-			if (execve(program, argv, envp_builder.getEnvp()) == -1) {
-				std::cerr << "execve error" << std::endl;
-				std::cerr << strerror(errno) << std::endl;
-			}
-			exit(1);
-		}
-		else {
-			close(serv_to_cgi[0]);
-			close(cgi_to_serv[1]);
-			
-			if (fcntl(serv_to_cgi[1], F_SETFL, O_NONBLOCK) == -1 ||
-				fcntl(cgi_to_serv[0], F_SETFL, O_NONBLOCK) == -1) {
-					std::cout << "fcntl" << std::endl;
-					resolveErrorAction(500, serv_cfg);
-				}
-			std::pair<int, int> cgi_fds = std::make_pair(cgi_to_serv[0], serv_to_cgi[1]);
-			if (!server->epoll_add_cgi(cgi_fds, client_fd)) {
-					std::cout << "epoll_add_cgi" << std::endl;
-					resolveErrorAction(500, serv_cfg);
-				}
-			
-			close(serv_to_cgi[1]);
-			// close(cgi_to_serv[0]);
+	if (req.getMethod() == "GET" || req.getMethod() == "POST") { // post?
+		action = resolveRequestToAction(serv_cfg, req);
+		switch (action.type) {
+			case ACTION_SERVE_FILE:
+				return sendFile(action, client_fd);
+			case ACTION_GENERATE_ERROR:
+				return sendDefaultError(action.status_code, client_fd);
+			case ACTION_AUTOINDEX:
+				return sendDir(action.target_path, client_fd, req.getPath());
+			case ACTION_CGI:
+				return state.addFds(action.cgi_fds.first, action.cgi_fds.second); // return 200 status code?
+			default:
+				return sendDefaultError(500, client_fd);
 		}
 	}
 }
@@ -385,15 +389,24 @@ ResolvedAction	RequestHandler::resolveErrorAction(int error_code, const Config &
 	return default_action;
 }
 
-ResolvedAction	RequestHandler::resolveRequestToAction(const Config &serv_cfg, const std::string &req_path) {
-	std::string		phys_path;
-	
+ResolvedAction	RequestHandler::resolveRequestToAction(const Config &serv_cfg, const HttpRequest &req) {
+	std::string				phys_path;
+	const std::string		&req_path = req.getPath();
+
 	const Location *location = findBestLocationMatch(serv_cfg, req_path);
 	if (location == NULL) {
 		return resolveErrorAction(404, serv_cfg);
 	}
 	if (location->getDirective("root", phys_path) == false) {
 		return resolveErrorAction(500, serv_cfg); // maybe different error
+	}
+	if (location->isCgiAllowed()) {
+		std::vector<std::string> req_path_tokens = StringUtils::split(req_path, '/');
+
+		for (std::vector<std::string>::const_iterator it = req_path_tokens.begin(); it != req_path_tokens.end(); ++it) {
+			if (it->length() > location->getCgiFormat().length() && it->substr(it->length() - 3) == location->getCgiFormat())
+				return resolveCgiScript(location, serv_cfg, req);
+		}
 	}
 	if (req_path == "/") {
 		std::string index;
@@ -465,7 +478,6 @@ ResolvedAction RequestHandler::resolveDirAction(const std::string &dir_path, con
 ResolvedAction	RequestHandler::checkReqPath(const std::string &path, const Config &cfg, const Location *location) {
 	struct stat st;
 
-	std::cout << path << std::endl;
 	if (stat(path.c_str(), &st) != 0) {
 		switch(errno) {
 			case ENOENT:

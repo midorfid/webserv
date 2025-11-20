@@ -147,7 +147,6 @@ ParseRequest::ParseResult ParseRequest::parse(const std::string &raw_request, Ht
 	std::string				reqNoBody;
 	size_t					eoh_pos;
 
-	std::cout << "qq";
 	eoh_pos = raw_request.find(EOH);
 	if (eoh_pos == raw_request.npos)
 		return ParsingIncomplete;

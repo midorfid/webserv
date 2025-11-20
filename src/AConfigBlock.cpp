@@ -65,3 +65,28 @@ bool		AConfigBlock::getErrorPage(int error_code, std::string &out_val) const {
 	out_val = it->second;
 	return true;
 }
+
+void
+AConfigBlock::setCgi() {
+	std::map<std::string, std::string>::const_iterator	it;
+
+	it = _directives.find("allow_cgi");
+	if (it == _directives.end()) {
+		_allow_cgi = false;
+		_cgi_format = "";
+	}
+	else {
+		_allow_cgi = true;
+		_cgi_format = it->second;
+	}
+}
+
+bool
+AConfigBlock::isCgiAllowed() const {
+	return _allow_cgi;
+}
+
+const std::string &
+AConfigBlock::getCgiFormat() const{
+	return _cgi_format;
+}

@@ -9,9 +9,8 @@
 size_t Environment::_parent_env_size = 0;
 char **Environment::_parent_env = NULL;
 
-Environment::Environment(const HttpRequest &req, const Server &server) :
+Environment::Environment(const HttpRequest &req) :
     _req(req),
-    _server(server),
     // _loc(loc),
     _cenv(NULL) {}
 
@@ -21,7 +20,6 @@ Environment::~Environment() {
 
 Environment::Environment(const Environment &other) :
     _req(other._req),
-    _server(other._server),
     // _loc(other._loc),
     _cenv(NULL) // shallow copy
 { *this = other; }
@@ -38,7 +36,6 @@ void
 Environment::build() {
     _vsenv.reserve(dfl_size + _req.headers().size());
 
-    append("SERVER_PORT", _server.port());
     append("REQUEST_METHOD", _req.getMethod());
     // if (req.getQuery().size()) TODO: PATH_INFO and PATH_TRANSLATED
     append("REQUEST_PATH", _req.getPath());

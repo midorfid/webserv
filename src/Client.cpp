@@ -10,7 +10,7 @@
 #define BUF_SIZE 4096
 #define MAX_REQUEST_SIZE 8192
 
-Client::Client() : _request_buffer(""), _keep_alive_timer(0), _parser(), _req() {}
+Client::Client() : _request_buffer(""), _keep_alive_timer(0), _parser(), _req(), _cgi_state(false) {}
 
 Client::~Client() {}
 
@@ -25,6 +25,7 @@ Client &Client::operator=(const Client &other) {
 		this->_ip_string = other._ip_string;
 		this->_port = other._port;
 		this->_sock_fd = other._sock_fd;
+		this->_cgi_state = other._cgi_state;
     }
     return *this;
 }
@@ -88,6 +89,7 @@ Client::reset() {
 	_request_buffer.clear();
 	_req = HttpRequest();
 	_is_ready = false;
+	_cgi_state = CgiInfo(false);
 }
 
 Client::Client(std::string &ip, std::string &port, int sock_fd) : _ip_string(ip), _port(port), _sock_fd(sock_fd), _is_ready(false) {
@@ -95,3 +97,8 @@ Client::Client(std::string &ip, std::string &port, int sock_fd) : _ip_string(ip)
 }
 
 Client::Client(int sock_fd) : _sock_fd(sock_fd) {}
+
+CgiInfo &
+Client::cgi_state() {
+	return _cgi_state;
+}
