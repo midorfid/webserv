@@ -27,6 +27,8 @@ store IPV4 or IPV6 in Client, also pass it to the CGI (inet_ntop  #include <arpa
 
 add extern for c libs
 
+move cgiinfo from client to httprequest makes more sense ig
+
 potentially dynamically allocate memore if keep_alive in CLient.cpp
 
 CGI

@@ -128,7 +128,6 @@ Server::handle_cgi_read(int read_fd) {
 	char buf[4096];
 	ssize_t bytes_read = read(read_fd, buf, 4096);
 	std::cout << "bytes read: " << bytes_read << std::endl;
-	std::cout << buf << std::endl; //               HERE prints "script path: /workspaces/webserv2.0/www", bytes read 40 ERROR TODO
 	if (bytes_read == -1) {
 		std::cout << "pupupu" << std::endl;
 	}
@@ -162,7 +161,6 @@ void	Server::run_event_loop(epoll_event *ev) {
 			exit(EXIT_FAILURE);
 		}
 		for (int i = 0; i < nfds; ++i) {
-			std::cout << "imp:" << events[i].data.fd << std::endl;
 			if (events[i].data.fd == this->_listen_sock) {
 				struct	sockaddr_storage	client_addr;
 				socklen_t	clientaddr_len = sizeof(client_addr);
