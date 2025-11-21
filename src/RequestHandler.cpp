@@ -144,7 +144,9 @@ bool RequestHandler::normalizePath(std::string &phys_path) {
 		std::cout << "errno: " << strerror(errno) << std::endl;
 		return false;
 	}
-	phys_path.erase(phys_path.length()-1); // double "//" change later TODO
+	for (size_t pos = phys_path.find("//"); pos != phys_path.npos; pos = phys_path.find("//")) {
+		phys_path.erase(pos);
+	}
 	std::cout << "normalized path:" << phys_path << "q" << std::endl;
 	// handle if request is outside of var/www/ directory TODO
 	phys_path = actual_path;
