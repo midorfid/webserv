@@ -5,6 +5,7 @@
 #include <sys/epoll.h>
 #include "ParseConfig.hpp"
 #include "RequestHandler.hpp"
+#include "log.hpp"
 
 class Server {
     public:

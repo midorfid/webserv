@@ -44,7 +44,8 @@ Client::processNewData(Server *server) {
 	bytes_read = recv(_sock_fd, temp_buf, BUF_SIZE, 0);
 	if (bytes_read > 0) {
 		if (bytes_read > MAX_REQUEST_SIZE) {
-			std::cout << "HTTP/1.1 413 Payload Too Large" << std::endl;
+			logTime(REGLOG);
+			std::cout << "HTTP/1.1 413 Payload Too Large\n" << std::endl;
 			send(_sock_fd, "HTTP/1.1 413 Payload Too Large\r\n\r\n", 32, 0); // TODO
 			server->disconnect_client(_sock_fd);
 			return;
@@ -59,10 +60,12 @@ Client::processNewData(Server *server) {
 		}
 	}
 	else if (bytes_read == 0) {
+		logTime(REGLOG);
 		std::cout << "bytes_read == 0" << std::endl;
         server->disconnect_client(_sock_fd);
 	}
 	else {
+		logTime(ERRLOG);
 		fprintf(stderr, "Client: %s port\n", strerror(errno));
         server->disconnect_client(_sock_fd);
 	}
@@ -93,7 +96,8 @@ Client::reset() {
 }
 
 Client::Client(std::string &ip, std::string &port, int sock_fd) : _ip_string(ip), _port(port), _sock_fd(sock_fd), _is_ready(false) {
-    std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
+	logTime(REGLOG);
+	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
 }
 
 Client::Client(int sock_fd) : _sock_fd(sock_fd) {}
