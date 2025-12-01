@@ -153,6 +153,8 @@ Server::handle_cgi_read(int read_fd) {
 void	Server::run_event_loop(epoll_event *ev) {
 	int                 	conn_sock, nfds;
 	struct epoll_event		events[MAX_EVENTS];
+	
+    std::cerr << "cerr into logs." << std::endl;
 
 	for (;;) {
 		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, -1);
