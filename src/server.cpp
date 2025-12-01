@@ -32,10 +32,12 @@ void	Server::hints_init(struct addrinfo *hints) {
 
 void	Server::disconnect_client(int client_fd) {
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL) == -1) {
+		logTime(ERRLOG);
 		fprintf(stderr, "epoll_ctl (DEL): %s\n", strerror(errno));
 	}
 	close(client_fd);
 	_clients.erase(client_fd);
+	logTime(REGLOG);
 	std::cout << "Client on fd " << client_fd << " disconnected." << std::endl;
 }
 
@@ -49,11 +51,13 @@ void Server::run(const std::string &cfg_file) {
 	if (this->_config.getPort("listen", _port)) {
 		this->init_sockets(_port.c_str());
 	} else {
+		logTime(ERRLOG);
 		std::cerr << "Error: No valid port found." << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
 	if (listen(this->_listen_sock, LISTEN_BACKLOG) == -1) {
+		logTime(ERRLOG);
 		fprintf(stderr, "listen: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -69,6 +73,7 @@ void	Server::init_sockets(const char *port) {
 	this->hints_init(&hints);
 	s = getaddrinfo(NULL, port, &hints, &result);
 	if (s != 0) {
+		logTime(ERRLOG);
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
 		exit(EXIT_FAILURE);
 	}
@@ -80,6 +85,7 @@ void	Server::init_sockets(const char *port) {
 			continue;
 
 		if (setsockopt(this->_listen_sock, SOL_SOCKET, SO_REUSEADDR, &optval_int, sizeof(int)) == -1) {
+			logTime(ERRLOG);
 			fprintf(stderr, "setsockopt: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);    
 		}
@@ -92,6 +98,7 @@ void	Server::init_sockets(const char *port) {
 	freeaddrinfo(result);
 
 	if (rp == NULL) {
+		logTime(ERRLOG);
 		fprintf(stderr, "Could not bind\n");
 		exit(EXIT_FAILURE);
 	}
@@ -101,6 +108,7 @@ void	Server::init_sockets(const char *port) {
 void	Server::init_epoll(epoll_event *ev) {
 	this->_epoll_fd = epoll_create1(0);
 	if (this->_epoll_fd == -1) {
+		logTime(ERRLOG);
 		fprintf(stderr, "epoll_create1: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -108,6 +116,7 @@ void	Server::init_epoll(epoll_event *ev) {
 	ev->events = EPOLLIN;
 	ev->data.fd = this->_listen_sock;
 	if (epoll_ctl(this->_epoll_fd, EPOLL_CTL_ADD, this->_listen_sock, ev) == -1) {
+		logTime(ERRLOG);
 		fprintf(stderr, "epoll_ctl: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -115,6 +124,7 @@ void	Server::init_epoll(epoll_event *ev) {
 void 
 Server::handle_cgi_write(int write_fd) {
 	// int &client_fd = _cgi_client[write_fd];
+	logTime(REGLOG);
 	std::cout << "cgi write_fd:" << write_fd << std::endl;
 
 	epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, write_fd, NULL);
@@ -124,17 +134,21 @@ void
 Server::handle_cgi_read(int read_fd) {
 	int &client_fd = _cgi_client[read_fd];
 	
+	logTime(REGLOG);
 	std::cout << "cgi read_fd:" << read_fd << std::endl;
 	char buf[4096];
 	ssize_t bytes_read = read(read_fd, buf, 4096);
+	logTime(REGLOG);
 	std::cout << "bytes read: " << bytes_read << std::endl;
 	if (bytes_read == -1) {
-		std::cout << "pupupu" << std::endl;
+		logTime(ERRLOG);
+		std::cerr << "read in cgi failed.\n";
 	}
 	else {
 		ssize_t total_sent;
 
 		total_sent = 0;
+		logTime(REGLOG);
 		std::cout << "client fd: " << client_fd << std::endl;
 		while (total_sent < bytes_read) {
 			ssize_t sent = send(client_fd, buf + total_sent, bytes_read - total_sent, 0);
@@ -143,6 +157,7 @@ Server::handle_cgi_read(int read_fd) {
 			}
 			total_sent += sent;
 		}
+		logTime(REGLOG);
 		std::cout << "bytes sent: " << total_sent << std::endl;
 
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
@@ -154,11 +169,10 @@ void	Server::run_event_loop(epoll_event *ev) {
 	int                 	conn_sock, nfds;
 	struct epoll_event		events[MAX_EVENTS];
 	
-    std::cerr << "cerr into logs." << std::endl;
-
 	for (;;) {
 		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, -1);
 		if (nfds == -1) {
+			logTime(ERRLOG);
 			fprintf(stderr, "epoll_wait: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
@@ -172,12 +186,14 @@ void	Server::run_event_loop(epoll_event *ev) {
 					if (errno == EAGAIN || errno == EWOULDBLOCK)
 						continue;
 					else {
+						logTime(ERRLOG);
 						fprintf(stderr, "accept: %s\n", strerror(errno));
 						continue;
 					}
 
 				}
 				if (fcntl(conn_sock, F_SETFL, O_NONBLOCK) == -1) {
+					logTime(ERRLOG);
 					fprintf(stderr, "fcntl: %s\n", strerror(errno));
 					close(conn_sock);
 					continue;
@@ -185,12 +201,14 @@ void	Server::run_event_loop(epoll_event *ev) {
 				ev->events = EPOLLIN;
 				ev->data.fd = conn_sock;
 				if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, conn_sock, ev) == -1) {
+					logTime(ERRLOG);
 					fprintf(stderr, "epoll_ctl (conn_sock): %s\n", strerror(errno));
 					close(conn_sock);
 				}
 				else {
 					std::pair<std::string, std::string> ipPort = getClientAddr(client_addr);
 					_clients[conn_sock] = Client(ipPort.first, ipPort.second, conn_sock);
+					logTime(REGLOG);
 					std::cout << "New connection on fd " << conn_sock << std::endl;
 				}
 			}
@@ -216,6 +234,7 @@ Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
 	ev.data.fd = cgi_fds.first;
 
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_fds.first, &ev) == -1) {
+		logTime(ERRLOG);
 		fprintf(stderr, "epoll_ctl (cgi read sock): %s\n", strerror(errno));
 		close(cgi_fds.first);
 		return false;
@@ -225,6 +244,7 @@ Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
 	ev.data.fd = cgi_fds.second;
 
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_fds.second, &ev) == -1) {
+		logTime(ERRLOG);
 		fprintf(stderr, "epoll_ctl (cgi write sock): %s\n", strerror(errno));
 		close(cgi_fds.second);
 		return false;
@@ -277,6 +297,7 @@ Server::getClientAddr(struct sockaddr_storage &client_addr) {
 	if (sock_addr->sa_family == AF_INET) {
 		sockaddr_in *sa_in = reinterpret_cast<sockaddr_in*>(sock_addr);
 		if (inet_ntop(AF_INET, &sa_in->sin_addr, ip_cstr, sizeof(ip_cstr)) == NULL) {
+			logTime(ERRLOG);
 			std::cerr << "inet_ntop ipv4" << "\n";
 		}
 		ipPort.second = std::to_string(ntohs(sa_in->sin_port));
@@ -284,6 +305,7 @@ Server::getClientAddr(struct sockaddr_storage &client_addr) {
 	else {
 		sockaddr_in6 *sa_in6 = reinterpret_cast<sockaddr_in6*>(sock_addr);
 		if (inet_ntop(AF_INET6, &sa_in6->sin6_addr, ip_cstr, sizeof(ip_cstr)) == NULL) {
+			logTime(ERRLOG);
 			std::cerr << "inet_ntop ipv6" << "\n";
 		}
 		ipPort.second = std::to_string(ntohs(sa_in6->sin6_port));
@@ -312,7 +334,7 @@ Server::handle_client_event(int client_fd) {
 	}
 	catch(const std::exception& e)
 	{
+		logTime(ERRLOG);
 		std::cerr << e.what() << '\n';
-		std::cout << "client cyka" << std::endl;
 	}
 }

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <sstream>
 #include <algorithm>
+#include "log.hpp"
 
 #define	EOL	"\r\n"
 #define	EOH	"\r\n\r\n"
@@ -108,10 +109,6 @@ void		ParseRequest::trimLeftWhitespace(std::string &to_trim) {
 void		ParseRequest::parseFirstLine(std::string &_current_line, HttpRequest &req) {
 	std::vector<std::string> first_line = tokenizeFirstLine(_current_line);
 
-	for (const auto & str : first_line)
-		std::cout << str << " ";
-	std::cout << std::endl;
-
 	parseMethod(first_line[0], req);
 	parsePathAndQuery(first_line[1], req);
 	parseHttpVer(first_line[2], req);
@@ -125,7 +122,8 @@ ParseRequest::BodyState	ParseRequest::parseBody(size_t eoh_pos, const std::strin
 	if (method == "GET" || method == "DELETE" || method == "HEAD") {
 		return BodyNotSent;
 	}
-	std::cout << "parsebodyqq" << std::endl;
+	logTime(REGLOG);
+	std::cout << "parsebodyqq\n" << std::endl;
 	try
 	{
 		body_size = std::atoi(req.getHeader("content-length").c_str());

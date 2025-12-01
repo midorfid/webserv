@@ -139,14 +139,17 @@ const Location	*RequestHandler::findBestLocationMatch(const Config &serv_cfg, co
 bool RequestHandler::normalizePath(std::string &phys_path) {
 	char actual_path[PATH_MAX];
 	
+	logTime(REGLOG);
 	std::cout << "input_path:" << phys_path << "q" << std::endl;
 	if (realpath(phys_path.c_str(), actual_path) == NULL) {
-		std::cout << "errno: " << strerror(errno) << std::endl;
+		logTime(ERRLOG);
+		std::cerr << "errno: " << strerror(errno) << std::endl;
 		return false;
 	}
 	for (size_t pos = phys_path.find("//"); pos != phys_path.npos; pos = phys_path.find("//")) {
 		phys_path.erase(pos);
 	}
+	logTime(REGLOG);
 	std::cout << "normalized path:" << phys_path << "q" << std::endl;
 	// handle if request is outside of var/www/ directory TODO
 	phys_path = actual_path;
