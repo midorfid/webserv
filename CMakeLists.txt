@@ -2,13 +2,25 @@ cmake_minimum_required(VERSION 3.10)
 
 project(webserv)
 
+set(EXEC_NAME "webserv")
+set(CONF_PATH "${CMAKE_SOURCE_DIR}/config/webserv.conf")
+
 # set(CMAKE_CXX_STANDARD 98)
 # set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB SRCS "src/*.cpp")
 
-add_executable(webserv ${SRCS})
+add_executable(${EXEC_NAME} ${SRCS})
 
-target_include_directories(webserv PRIVATE include)
+target_include_directories(${EXEC_NAME} PRIVATE include)
 
-target_compile_options(webserv PRIVATE -Wall -Wextra -Werror -Iinclude -std=c++11)
+target_compile_options(${EXEC_NAME} PRIVATE -Wall -Wextra -Werror -Iinclude -std=c++11)
+
+add_custom_target(run
+    COMMAND $<TARGET_FILE:${EXEC_NAME}> ${CONF_PATH} 2>>logs.txt
+
+    DEPENDS ${EXEC_NAME}
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    USES_TERMINAL
+    COMMENT "Starting ${EXEC_NAME}..."
+)
