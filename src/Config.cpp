@@ -67,3 +67,13 @@ Location					&Config::getNewLocation() {
     _locations.push_back(Location());
     return _locations.back();
 }
+
+void
+Config::setKeepAliveTimer(int t) {
+    _keepalive_timer = t;
+}
+
+int
+Config::getKeepAliveTimer(void) const{
+    return _keepalive_timer;
+}

@@ -1,0 +1,4 @@
+/workspaces/webserv/CMakeFiles/webserv.dir
+/workspaces/webserv/CMakeFiles/run.dir
+/workspaces/webserv/CMakeFiles/edit_cache.dir
+/workspaces/webserv/CMakeFiles/rebuild_cache.dir

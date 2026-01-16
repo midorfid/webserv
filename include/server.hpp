@@ -45,4 +45,6 @@ class Server {
         void    		hints_init(struct addrinfo *hints);
         void    		handle_new_connection();
         void    		handle_client_event(int client_fd);
+
+        bool            isExpired(int cfg_lim, const time_t &client_tm);
 };

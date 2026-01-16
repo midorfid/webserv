@@ -16,6 +16,7 @@
 #include "server.hpp"
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <ctime>
 
 #define LISTEN_BACKLOG 50
 #define MAX_EVENTS 10
@@ -166,9 +167,10 @@ Server::handle_cgi_read(int read_fd) {
 	}
 }
 void	Server::run_event_loop(epoll_event *ev) {
-	int                 	conn_sock, nfds;
-	struct epoll_event		events[MAX_EVENTS];
-	
+	int                 			conn_sock, nfds;
+	struct epoll_event				events[MAX_EVENTS];
+	std::multimap<time_t, int>		timed_conns;
+
 	for (;;) {
 		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, -1);
 		if (nfds == -1) {
@@ -209,6 +211,7 @@ void	Server::run_event_loop(epoll_event *ev) {
 					std::pair<std::string, std::string> ipPort = getClientAddr(client_addr);
 					_clients[conn_sock] = Client(ipPort.first, ipPort.second, conn_sock);
 					logTime(REGLOG);
+					timed_conns.emplace(std::make_pair(time(NULL), conn_sock));
 					std::cout << "New connection on fd " << conn_sock << std::endl;
 				}
 			}
@@ -223,7 +226,24 @@ void	Server::run_event_loop(epoll_event *ev) {
 				handle_client_event(events[i].data.fd);
 			}
 		}
+		while (!timed_conns.empty()) {
+			std::multimap<time_t,int>::iterator it = timed_conns.begin();
+
+			if (isExpired(_config.getKeepAliveTimer(), it->first)) {
+				disconnect_client(it->second);
+				timed_conns.erase(it);
+			}
+			else
+				break;
+		}
 	}
+}
+
+bool
+Server::isExpired(int cfg_lim, const time_t &client_tm) {
+	time_t curr_tm = time(NULL);
+	std::cout << "Time diff:" << client_tm - curr_tm << std::endl; 
+	return (client_tm - curr_tm) > cfg_lim ? true : false;
 }
 
 bool

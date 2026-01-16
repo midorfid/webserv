@@ -134,6 +134,10 @@ void ParseConfig::parseBlock(AConfigBlock &block) {
 				error_code.pop_back();
 			}
 		}
+		else if (key == "keepalive_timeout") {
+			std::string val = getNextToken().value;
+			static_cast<Config&>(block).setKeepAliveTimer(static_cast<int>(std::strtol(val.erase(val.length()-1).c_str(), NULL, 10)));
+		}
 		else {
 			// std::cout << key << std::endl;
 			std::vector<std::string>	value;

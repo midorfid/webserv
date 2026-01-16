@@ -1,1 +1,6 @@
-# webserv2.0
+# Webserv
+
+## Set up
+```sh
+test
+```

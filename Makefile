@@ -57,10 +57,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /workspaces/webserv2.0
+CMAKE_SOURCE_DIR = /workspaces/webserv
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /workspaces/webserv2.0
+CMAKE_BINARY_DIR = /workspaces/webserv
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -87,9 +87,9 @@ rebuild_cache/fast: rebuild_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /workspaces/webserv2.0/CMakeFiles /workspaces/webserv2.0//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /workspaces/webserv/CMakeFiles /workspaces/webserv//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /workspaces/webserv2.0/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /workspaces/webserv/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -128,6 +128,19 @@ webserv: cmake_check_build_system
 webserv/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/webserv.dir/build.make CMakeFiles/webserv.dir/build
 .PHONY : webserv/fast
+
+#=============================================================================
+# Target rules for targets named run
+
+# Build rule for target.
+run: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 run
+.PHONY : run
+
+# fast build rule for target.
+run/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/run.dir/build.make CMakeFiles/run.dir/build
+.PHONY : run/fast
 
 src/AConfigBlock.o: src/AConfigBlock.cpp.o
 .PHONY : src/AConfigBlock.o
@@ -473,6 +486,7 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... run"
 	@echo "... webserv"
 	@echo "... src/AConfigBlock.o"
 	@echo "... src/AConfigBlock.i"

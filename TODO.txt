@@ -10,6 +10,8 @@ SET UP LOGS
 
 PARSE ERROR PAGES FROM THE CONFIG!!!
 
+handle cgi timeouts
+
 remove exits(Failure) inside server loop, disconnect client instead
 make tokenize() ignore comments
 

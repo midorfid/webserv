@@ -63,6 +63,8 @@ Client::processNewData(Server *server) {
 		logTime(REGLOG);
 		std::cout << "bytes_read == 0" << std::endl;
         server->disconnect_client(_sock_fd);
+		// handle timed_conns if disconnect here TODO
+		// rather reset if keep_alive
 	}
 	else {
 		logTime(ERRLOG);
