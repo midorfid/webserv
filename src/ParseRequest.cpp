@@ -157,7 +157,7 @@ ParseRequest::ParseResult ParseRequest::parse(const std::string &raw_request, Ht
 
 	if (parseBody(eoh_pos, raw_request, req) == BodyIncomplete)
 		return ParsingIncomplete;
-	
+
 	return ParsingComplete;
 }
 

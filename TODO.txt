@@ -1,12 +1,18 @@
-File System Hierarhy Standard for Server in docker/cmake
-
 POST AND DELETE METHODS HANDLE, SO FAR ONLY GET IS HANDLED
 
-KEEP ALIVE TIMER!!!
+for POST:
+1) check limit_except, if not allowed send 405 with allowed METHODS
+2) create/modify file
+3) send page "successfully_uploaded.html" with GET?
+
+
+File System Hierarhy Standard for Server in docker/cmake
+
+KEEP ALIVE TIMER!!! -> works, might've forgotten something
 
 Stream send files to the client.
 
-SET UP LOGS
+SET UP LOGS -> make run ||| Apparently, I gotta create the files when I init Log class, can create the dir in cmake tho TODO
 
 PARSE ERROR PAGES FROM THE CONFIG!!!
 

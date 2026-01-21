@@ -172,7 +172,10 @@ void	Server::run_event_loop(epoll_event *ev) {
 	std::multimap<time_t, int>		timed_conns;
 
 	for (;;) {
-		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, -1);
+		int wait_time = -1;
+		if (!timed_conns.empty())
+			wait_time = static_cast<int>(time(NULL) - timed_conns.begin()->first);
+		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, wait_time);
 		if (nfds == -1) {
 			logTime(ERRLOG);
 			fprintf(stderr, "epoll_wait: %s\n", strerror(errno));
@@ -223,7 +226,7 @@ void	Server::run_event_loop(epoll_event *ev) {
 				// clear?
 			}
 			else {
-				handle_client_event(events[i].data.fd);
+				handle_client_event(events[i].data.fd); // add return value in case the client needs to be disconnected TODO
 			}
 		}
 		while (!timed_conns.empty()) {
@@ -237,13 +240,14 @@ void	Server::run_event_loop(epoll_event *ev) {
 				break;
 		}
 	}
+	
 }
 
 bool
 Server::isExpired(int cfg_lim, const time_t &client_tm) {
 	time_t curr_tm = time(NULL);
-	std::cout << "Time diff:" << client_tm - curr_tm << std::endl; 
-	return (client_tm - curr_tm) > cfg_lim ? true : false;
+	// std::cout << "Time diff:" << curr_tm - client_tm << std::endl; 
+	return (curr_tm - client_tm) > cfg_lim ? true : false;
 }
 
 bool
@@ -338,8 +342,9 @@ Server::getClientAddr(struct sockaddr_storage &client_addr) {
 void
 Server::handle_client_event(int client_fd) {
 	try {
+		
 		Client &client = _clients.at(client_fd);
-
+		
 		client.processNewData(this);
 		
 		if (client.ready()) {
