@@ -6,6 +6,8 @@
 #include <sstream>
 #include <algorithm>
 #include "log.hpp"
+#include <limits.h>
+#include <string.h>
 
 #define	EOL	"\r\n"
 #define	EOH	"\r\n\r\n"
@@ -140,6 +142,55 @@ ParseRequest::BodyState	ParseRequest::parseBody(size_t eoh_pos, const std::strin
 	return BodySent;
 }
 
+std::string	&normalizePath(const std::string &req_path) {
+	std::vector<std::string>	stack;
+	std::stringstream			ss(req_path);
+	std::string					token;
+
+	while (std::getline(ss, token, '/')) {
+		if (token == "." || token == "") {
+			continue;
+		}
+		if (token == "..") {
+			if (stack.empty()) {
+				continue;
+			}
+			stack.pop_back();
+		}
+		else
+			stack.push_back(token);
+	}
+	std::string norm_path = "";
+	if (req_path[0] == '/') norm_path == "/";
+
+	for (size_t i = 0; i < stack.size(); ++i) {
+		norm_path += stack[i];
+		if (i < stack.size() - 1)
+			norm_path += '/';
+	}
+
+	return norm_path;
+}
+	// char actual_path[PATH_MAX];
+	// 
+	// logTime(REGLOG);
+	// std::cout << "input_path:" << req_path << "q" << std::endl;
+	// if (realpath(req_path.c_str(), actual_path) == NULL) {
+		// logTime(ERRLOG);
+		// std::cerr << "errno: " << strerror(errno) << std::endl;
+		// return false;
+	// }
+	// std::string apath = static_cast<std::string>(actual_path);
+	// for (size_t pos = apath.find("//"); pos != apath.npos; pos = apath.find("//")) {
+		// apath.erase(pos, 1);
+	// }
+	// logTime(REGLOG);
+	// std::cout << "normalized path:" << apath << "q" << std::endl;
+	// handle if request is outside of var/www/ directory TODO
+	// req_path = apath;
+	// return true;
+// }
+
 ParseRequest::ParseResult ParseRequest::parse(const std::string &raw_request, HttpRequest &req) {
 	std::string				_current_line;
 	std::string				reqNoBody;
@@ -158,6 +209,8 @@ ParseRequest::ParseResult ParseRequest::parse(const std::string &raw_request, Ht
 	if (parseBody(eoh_pos, raw_request, req) == BodyIncomplete)
 		return ParsingIncomplete;
 
+	req.setPath(normalizePath(req.getPath()));
+	
 	return ParsingComplete;
 }
 

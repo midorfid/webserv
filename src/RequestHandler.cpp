@@ -3,7 +3,7 @@
 #include <sys/stat.h>
 #include <ctime>
 #include <cstdlib>
-// #include <limits.h>
+// #include <limits.bool	h(const Config &serv_cfg, const std::string &method, const std::string &client_ip) {}
 #include <sstream>
 #include <fstream>
 #include <dirent.h>
@@ -134,26 +134,6 @@ const Location	*RequestHandler::findBestLocationMatch(const Config &serv_cfg, co
 		}
 	}
 	return best_match;
-}
-
-bool RequestHandler::normalizePath(std::string &phys_path) {
-	char actual_path[PATH_MAX];
-	
-	logTime(REGLOG);
-	std::cout << "input_path:" << phys_path << "q" << std::endl;
-	if (realpath(phys_path.c_str(), actual_path) == NULL) {
-		logTime(ERRLOG);
-		std::cerr << "errno: " << strerror(errno) << std::endl;
-		return false;
-	}
-	for (size_t pos = phys_path.find("//"); pos != phys_path.npos; pos = phys_path.find("//")) {
-		phys_path.erase(pos);
-	}
-	logTime(REGLOG);
-	std::cout << "normalized path:" << phys_path << "q" << std::endl;
-	// handle if request is outside of var/www/ directory TODO
-	phys_path = actual_path;
-	return true;
 }
 
 const std::string RequestHandler::createSuccResponseHeaders(long int contentLen) {
@@ -346,6 +326,15 @@ RequestHandler::resolveCgiScript(const Location *loc, const Config &serv_cfg, co
 	}
 }
 
+bool	checkLimitExcept(const Config &serv_cfg, const std::string &method, const std::string &client_ip) {
+	
+}
+
+void handlePost(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
+
+}
+
+
 void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, CgiInfo &state) {
 	ResolvedAction	action;
 	if (req.getMethod() == "GET" || req.getMethod() == "POST") { // post?
@@ -413,21 +402,7 @@ ResolvedAction	RequestHandler::resolveRequestToAction(const Config &serv_cfg, co
 				return resolveCgiScript(location, serv_cfg, req);
 		}
 	}
-	if (req_path == "/") {
-		std::string index;
-		if (!location->getIndex(index))
-			return resolveErrorAction(404, serv_cfg);
-		struct stat st;
-		std::string physAndIdxPath = phys_path + index;
-		if (stat(physAndIdxPath.c_str(), &st) == 0) {
-			return resolveFileAction(physAndIdxPath, &st);
-		} // handle if index not found, autoindex off TODO as well as multiple indexes
-		return resolveErrorAction(404, serv_cfg);
-	}
-	if (normalizePath(phys_path) == false) {
-		return resolveErrorAction(404, serv_cfg);
-	}
-	return checkReqPath(phys_path, serv_cfg, location);
+
 }
 
 ResolvedAction RequestHandler::resolveFileAction(const std::string &path, struct stat *st) {
