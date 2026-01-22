@@ -171,25 +171,6 @@ std::string	&normalizePath(const std::string &req_path) {
 
 	return norm_path;
 }
-	// char actual_path[PATH_MAX];
-	// 
-	// logTime(REGLOG);
-	// std::cout << "input_path:" << req_path << "q" << std::endl;
-	// if (realpath(req_path.c_str(), actual_path) == NULL) {
-		// logTime(ERRLOG);
-		// std::cerr << "errno: " << strerror(errno) << std::endl;
-		// return false;
-	// }
-	// std::string apath = static_cast<std::string>(actual_path);
-	// for (size_t pos = apath.find("//"); pos != apath.npos; pos = apath.find("//")) {
-		// apath.erase(pos, 1);
-	// }
-	// logTime(REGLOG);
-	// std::cout << "normalized path:" << apath << "q" << std::endl;
-	// handle if request is outside of var/www/ directory TODO
-	// req_path = apath;
-	// return true;
-// }
 
 ParseRequest::ParseResult ParseRequest::parse(const std::string &raw_request, HttpRequest &req) {
 	std::string				_current_line;

@@ -3,6 +3,7 @@
 #include <string>
 #include "httpRequest.hpp"
 #include "ParseRequest.hpp"
+#include "RouteRequest.hpp"
 #include "cgi.hpp"
 
 class Server;
@@ -31,6 +32,7 @@ class Client {
 
 	private:
 	
+
 		std::string		_ip_string;
 		std::string		_port;
 		int				_sock_fd;
@@ -38,6 +40,7 @@ class Client {
 		bool			_is_ready;
 		std::string		_request_buffer;
         int				_keep_alive_timer;
+		RouteRequest	_route_reslvr;
         ParseRequest    _parser;
 		HttpRequest     _req;
 		CgiInfo			_cgi_state;

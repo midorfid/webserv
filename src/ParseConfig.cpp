@@ -64,7 +64,7 @@ void	ParseConfig::parseLocationBlock(Config &config) {
 			}
 		}
 		else if (key == "limit_except") {
-			loc.addLimitExceptRules("method", getNextToken().value);
+			loc.addLimitExceptR("method", getNextToken().value);
 			if (peekNextToken().value == "{") {
 				getNextToken().value;
 			}

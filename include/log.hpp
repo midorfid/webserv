@@ -18,7 +18,7 @@ inline std::string getTime() {
 
     return std::string(buf);
 }
-
+/* @param logtype is either REGLOG or ERRLOG */
 inline void    logTime(int logtype) {
     std::string curr_time = getTime();
     switch(logtype) {

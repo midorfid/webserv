@@ -1,6 +1,7 @@
 #include "Location.hpp"
 #include "StringUtils.hpp"
 #include <iostream>
+#include "log.hpp"
 
 // void						Location::_setDirective(const std::string &key, const std::string &value) {
 	// AConfigBlock::setDirective(key, value);
@@ -16,14 +17,20 @@
 // }	
 // 
 
+void Location::addLimitExceptMethod(const std::string &method) {
+	_rules.
+}
+
 void		Location::addLimitExceptRules(const std::string &key, const std::string &value) {
 	if (key == "method")
-		this->_rules._methods.push_back(value);
+		this->_rules._methods += ' ' + value;
 	else if (key == "allow")
-		this->_rules._allow.push_back(value);
+		this->_rules._allow += ' ' + value;
 	else if (key == "deny")
-		this->_rules._deny.push_back(value);
-	else
+		this->_rules._deny += ' ' + value;
+	else {
+		logTime(ERRLOG);
 		std::cerr << "WARNING.Unknown rule in limit_except. Continuing...\n";
+	}
 	return ;
 }

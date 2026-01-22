@@ -54,8 +54,10 @@ Client::processNewData(Server *server) {
     		_request_buffer.reserve(sizeof(temp_buf));
     		_request_buffer.append(temp_buf);
     		// TODO potentially dynamically allocate memore if keep_alive
-    		if (_parser.parse(_request_buffer, _req) == ParseRequest::ParsingComplete)
+    		if (_parser.parse(_request_buffer, _req) == ParseRequest::ParsingComplete) {
+							
 				_is_ready = true;
+			}
 			return;
 		}
 	}
