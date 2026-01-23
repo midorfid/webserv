@@ -17,7 +17,8 @@ class ParseConfig : public AParser {
 		void parse(const std::string &path, Config &config);
 
 	private:
-	
+
+		void										parseLimitExceptB(Location	&loc);
 		void										finalizeLocations(std::vector<Location> &loc);
 		void										parseServers();
 		void										parseBlock(AConfigBlock &block);
@@ -26,4 +27,5 @@ class ParseConfig : public AParser {
 		void										syntaxCheck();
 		std::pair<std::string, std::string>			parseLocDirectives(std::vector<std::string> &tokens);
 		void										parseLocationBlock(Config &config);
+
 };

@@ -39,3 +39,19 @@ std::string		StringUtils::myItoa(int input) {
     res << input;
     return res.str();
 }
+
+HttpMethod	StringUtils::stringToMethod(const std::string &str) {
+	static std::map<std::string, HttpMethod> m;
+
+    if (m.empty()) {
+	    m["GET"] = M_GET;
+	    m["PUT"] = M_PUT;
+	    m["POST"] = M_POST;
+	    m["DELETE"] = M_DELETE;
+    }
+
+    if (m.count(str))
+        return m[str];
+    
+    return UNKNOWN;
+}

@@ -23,9 +23,11 @@ class Config : public AConfigBlock {
 		bool						getErrorPage(int code, std::string &errorPage) const;
 		Location					&getNewLocation();
 		void						setKeepAliveTimer(int);
-	private:
-		void    					setError_page(const std::string &value);
 
+	private:
+
+		void				    					setError_page(const std::string &value);
+		
     	std::map<int, std::string>			_error_pages;
 		std::vector<Location>				_locations;
 		int									_port;

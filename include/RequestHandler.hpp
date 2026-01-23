@@ -3,7 +3,6 @@
 #include <string>
 #include "httpRequest.hpp"
 #include "Config.hpp"
-#include "ResolvedAction.hpp"
 #include "cgi.hpp"
 
 class Server;

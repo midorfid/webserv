@@ -23,12 +23,10 @@ class Location : public AConfigBlock {
 		void						setPath(const std::string &path) { this->_path = path; }
 
 		void						addLimitExceptRule(const std::string &key, const std::string &value);
-		void						addLimitExceptMethod(const std::string &method);
+		void						addLimitExceptMethod(const HttpMethod &methBit);
 
 
-		const std::string			&getRulesMethods() const { return _rules._methods; }
-		const std::string			&getRulesAllowed() const { return _rules._allow; }
-		const std::string			&getRulesDenied() const { return _rules._deny; }
+		bool						checkLimExceptAccess(const std::string &meth, const std::string &ip) const;
 
 		// void						_setDirective(const std::string &key, const std::string &value);
         // void						_setMultiDirective(const std::string &key, const std::vector<std::string> &value);

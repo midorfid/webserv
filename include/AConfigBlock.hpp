@@ -12,13 +12,6 @@ struct AccessRule {
 	in_addr_t	mask;
 };
 
-enum HttpMethod {
-    M_GET    = 1,  // 0001
-    M_POST   = 2,  // 0010
-    M_PUT    = 4,  // 0100
-    M_DELETE = 8   // 1000
-};
-
 /*
 	@param methodMask: @param GET 1 @param POST 2 @param PUT 4 @param DELETE 8
 */
@@ -27,6 +20,8 @@ struct limitExceptRules {
 	unsigned int methodMask : 4;
 
 	std::vector<AccessRule> rules;
+
+	limitExceptRules() : isActive(0), methodMask(0) {}
 };
 
 class AConfigBlock {

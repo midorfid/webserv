@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <cstring>
+#include "log.hpp"
 
 void	ParseConfig::syntaxCheck() {
 	if (getNextToken().value == "server") {
@@ -35,6 +36,22 @@ void ParseConfig::parse(const std::string &cfg_path, Config &config) {
 // 	// TODO pushback to server cfgs vector
 // }
 
+void	ParseConfig::parseLimitExceptB(Location	&loc) {
+	for (std::string meth = getNextToken().value; meth != "{"; meth = getNextToken().value) {
+		HttpMethod hm = StringUtils::stringToMethod(meth);
+		if (StringUtils::stringToMethod(meth) != UNKNOWN)
+			loc.addLimitExceptMethod(hm);
+		else {
+			logTime(ERRLOG);
+			std::cerr << "Wrong method in limit_except block in the config. Ignoring '" << meth << "'." << std::endl; 
+		}
+	}
+	for (std::string access = getNextToken().value; access != "{"; access = getNextToken().value) {
+		std::string accessVal = getNextToken().value;
+		accessVal.erase(--accessVal.end()); // erase semicolon
+		loc.addLimitExceptRule(access, accessVal);
+	}
+}
 void	ParseConfig::parseLocationBlock(Config &config) {
 	std::string key;
 	Location	&loc = config.getNewLocation();
@@ -64,18 +81,7 @@ void	ParseConfig::parseLocationBlock(Config &config) {
 			}
 		}
 		else if (key == "limit_except") {
-			loc.addLimitExceptR("method", getNextToken().value);
-			if (peekNextToken().value == "{") {
-				getNextToken().value;
-			}
-			while (1) {
-				std::string limKey = getNextToken().value;
-				if (limKey == "}")
-					break;
-				std::string limVal = getNextToken().value;
-				limVal.erase(limVal.length()-1);
-				loc.addLimitExceptRules(limKey, limVal);
-			}
+			parseLimitExceptB(loc);
 		}
 		else {
 			std::vector<std::string>	value;

@@ -2,6 +2,8 @@
 #include "StringUtils.hpp"
 #include <iostream>
 #include "log.hpp"
+#include <arpa/inet.h>
+#include <sstream>
 
 // void						Location::_setDirective(const std::string &key, const std::string &value) {
 	// AConfigBlock::setDirective(key, value);
@@ -17,20 +19,42 @@
 // }	
 // 
 
-void Location::addLimitExceptMethod(const std::string &method) {
-	_rules.
+void Location::addLimitExceptMethod(const HttpMethod &methBit) {
+	_rules.methodMask |= methBit;
 }
 
-void		Location::addLimitExceptRules(const std::string &key, const std::string &value) {
-	if (key == "method")
-		this->_rules._methods += ' ' + value;
-	else if (key == "allow")
-		this->_rules._allow += ' ' + value;
-	else if (key == "deny")
-		this->_rules._deny += ' ' + value;
-	else {
-		logTime(ERRLOG);
-		std::cerr << "WARNING.Unknown rule in limit_except. Continuing...\n";
+void		Location::addLimitExceptRule(const std::string &key, const std::string &value) {
+	AccessRule	ar;
+	ar.allow = (key == "allow") ? true : false;
+	if (value == "all") {
+		ar.ip = 0;
+		ar.mask = 0;
 	}
-	return ;
+	else {
+		std::vector<std::string>	vs = StringUtils::split(value, '/');
+		ar.mask = inet_addr(vs.back().c_str());
+		vs.pop_back();
+		ar.ip = inet_addr(vs.back().c_str());
+		vs.pop_back();
+	}
+	_rules.rules.emplace_back(ar);
+	_rules.isActive = 1;
+}
+
+bool	Location::checkLimExceptAccess(const std::string &meth, const std::string &ip) const {
+	if (!_rules.isActive)
+		return true;
+	HttpMethod hm = StringUtils::stringToMethod(meth);
+	if (hm == UNKNOWN)
+		return false;
+	if (hm == (hm & _rules.methodMask))
+		return true;
+	else {
+		for (std::vector<AccessRule>::const_iterator it = _rules.rules.begin(); it != _rules.rules.end(); ++it) {
+			if ((inet_addr(ip.c_str()) & it->mask) == (it->mask & it->ip)) {
+				return it->allow == true ? true : false;
+			}
+		}
+	}
+	return true;
 }
