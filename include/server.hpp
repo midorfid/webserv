@@ -6,6 +6,7 @@
 #include "ParseConfig.hpp"
 #include "RequestHandler.hpp"
 #include "log.hpp"
+#include "RouteRequest.hpp"
 
 class Server {
     public:
@@ -32,6 +33,7 @@ class Server {
         std::map<int, Client>                   _clients;
         Config                                  _config;
         ParseConfig				                _ConfigParser;
+		RouteRequest	                        _route_reslvr;
         RequestHandler                          _handler;
         std::map<int, int>                      _cgi_client;
         

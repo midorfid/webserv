@@ -13,6 +13,7 @@ enum ActionType {
 	ACTION_GENERATE_ERROR,
 	ACTION_CGI,
 	ACTION_REDIRECT,
+	ACTION_RESOLVE_TO_HANDLER,
 };
 
 struct ResolvedAction {
@@ -25,11 +26,13 @@ struct ResolvedAction {
 
 class RouteRequest {
     public:
-        ResolvedAction	resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req);
+        ResolvedAction	resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req, const std::string &client_ip);
     
 
-    bool	checkLimitExcept(const Config &serv_cfg, const std::string &method, const std::string &client_ip);
-    private:
+	private:
+
+		ResolvedAction		PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg);
+		bool				checkLimitExcept(const std::string &method, const std::string &client_ip);
         const Location      *findBestLocationMatch(const Config &serv_cfg, const std::string &url);
         std::string			handlePath(const Config &serv_cfg, HttpRequest &req);
 		ResolvedAction		resolveErrorAction(int error_code, const Config &serv_cfg);

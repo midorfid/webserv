@@ -348,6 +348,8 @@ Server::handle_client_event(int client_fd) {
 		client.processNewData(this);
 		
 		if (client.ready()) {
+			if (_route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip()))
+				// handle access denied
 			_handler.handle(_config, client.req(), client_fd, client.cgi_state());
 			const CgiInfo &cgi = client.cgi_state();
 			if (cgi.isCgi()) {

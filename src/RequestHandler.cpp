@@ -232,9 +232,7 @@ void handlePost(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
 
 
 void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, CgiInfo &state) {
-	ResolvedAction	action;
 	if (req.getMethod() == "GET" || req.getMethod() == "POST") { // post?
-		action = resolveRequestToAction(serv_cfg, req);
 		switch (action.type) {
 			case ACTION_SERVE_FILE:
 				return sendFile(action, client_fd);

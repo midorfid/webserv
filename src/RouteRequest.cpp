@@ -118,7 +118,7 @@ ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config 
 	return resolveErrorAction(403, cfg);
 }
 
-ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req) {
+ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req, const std::string &client_ip) {
 	std::string				phys_path;
 	const std::string		&req_path = req.getPath();
 
@@ -126,28 +126,21 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	if (location == NULL) {
 		return resolveErrorAction(404, serv_cfg);
 	}
-	if (location->getRulesMethods().find(req.getMethod()) == std::string::npos) {
-		if (location.getRu)
-	}
-	if (location->getDirective("root", phys_path) == false) {
-		return resolveErrorAction(500, serv_cfg); // maybe different error
-	}
-	if (location->isCgiAllowed()) {
-		std::vector<std::string> req_path_tokens = StringUtils::split(req_path, '/');
-
-		for (std::vector<std::string>::const_iterator it = req_path_tokens.begin(); it != req_path_tokens.end(); ++it) {
-			if (it->length() > location->getCgiFormat().length() && it->substr(it->length() - 3) == location->getCgiFormat()) //TODO this is weird
-				return resolveCgiScript(location, serv_cfg, req);
-		}
+	if (!location->checkLimExceptAccess(req.getMethod(), client_ip)) {
+		return resolveErrorAction(403, serv_cfg);
 	}
 
+	return PathFinder(req, *location, serv_cfg);
 }
 
-void RouteRequest::routePath(const std::string &req_path, ) {
-
-	if (req_path == "/") {
-
-		std::string index;
+ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg) {
+	const std::string &req_path = req.getPath();
+	
+	if (loc.isCgiRequest(req_path)) {
+		return resolveCgiScript(&loc, serv_cfg, req);
+	}
+	if (isDirRequest())
+	std::string index;
 
 		if (!location->getIndex(index))
 
@@ -164,7 +157,6 @@ void RouteRequest::routePath(const std::string &req_path, ) {
 		} // handle if index not found, autoindex off TODO as well as multiple indexes
 
 		return resolveErrorAction(404, serv_cfg);
-
 	}
 
 	if (normalizePath(phys_path) == false) {

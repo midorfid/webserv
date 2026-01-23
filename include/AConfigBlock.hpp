@@ -37,9 +37,7 @@ class AConfigBlock {
 		bool						getMultiDirective(const std::string &key, std::vector<std::string> &out_val) const;
 
 		void								setCgi();
-		bool								isCgiAllowed() const;
-		const std::string					&getCgiFormat() const;
-
+		bool								isCgiRequest(const std::string &req_path) const;
 		virtual void						setDirective(const std::string &key, const std::string &value);
         virtual void						setMultiDirective(const std::string &key, const std::vector<std::string> &value);
 		virtual void						setErrorPage(const std::string &error_code, const std::string &file);
@@ -55,7 +53,9 @@ class AConfigBlock {
 		AConfigBlock &operator=(const AConfigBlock &other) { (void)
 			other; return *this; }
 
-		
+		bool								isCgiAllowed() const;
+		const std::string					&getCgiFormat() const;
+			
 		bool												_allow_cgi;
 		std::string											_cgi_format;
 		std::map<std::string, std::string>					_error_pages;

@@ -90,3 +90,16 @@ const std::string &
 AConfigBlock::getCgiFormat() const{
 	return _cgi_format;
 }
+
+bool
+AConfigBlock::isCgiRequest(const std::string &req_path) const {
+	if (!isCgiAllowed())
+		return false;
+	size_t pos = req_path.rfind('.');	
+
+	if (pos == std::string::npos)
+		return false;
+	if (req_path.substr(pos) == getCgiFormat())
+		return true;
+	return false;
+}

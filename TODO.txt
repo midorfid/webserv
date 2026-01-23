@@ -2,6 +2,7 @@
 //TODO add intermediate step router which concatenate req path with loc path = phys path and passes it to handler to abstract it more
 change the way limit_except is parsed and stored, use int bitmask to optimize the comparison
 
+// TODO no need to normalize path in router, only cat to match phys
 
 POST AND DELETE METHODS HANDLE, SO FAR ONLY GET IS HANDLED |||| support of CGI for these methods later
 
@@ -10,6 +11,7 @@ for POST:
 2) create/modify file
 3) send page "successfully_uploaded.html" with GET?
 
+add static map for default error code to error msgs
 
 File System Hierarhy Standard for Server in docker/cmake
 

@@ -3,6 +3,7 @@
 #include <string>
 #include <map>
 #include "AConfigBlock.hpp"
+#include "StringUtils.hpp"
 
 class Location : public AConfigBlock {
 	public:
