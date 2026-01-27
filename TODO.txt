@@ -2,6 +2,11 @@
 //TODO add intermediate step router which concatenate req path with loc path = phys path and passes it to handler to abstract it more
 change the way limit_except is parsed and stored, use int bitmask to optimize the comparison
 
+implement 3 defense layers:
+1) long url
+2) body size > max
+3) slowpokes connections to exhaust the fd limit
+
 // TODO no need to normalize path in router, only cat to match phys
 
 POST AND DELETE METHODS HANDLE, SO FAR ONLY GET IS HANDLED |||| support of CGI for these methods later

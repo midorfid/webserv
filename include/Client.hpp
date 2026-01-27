@@ -4,8 +4,17 @@
 #include "httpRequest.hpp"
 #include "ParseRequest.hpp"
 #include "cgi.hpp"
+#include <time.h>
 
 class Server;
+
+enum ClientState {
+	IDLE,
+	READING_HEADERS,
+	READING_BODY,
+	WRITING_RESPONSE,
+	DONE,
+};
 
 class Client {
 	public:
@@ -31,7 +40,8 @@ class Client {
 
 	private:
 	
-
+		time_t			_req_start_time;
+		ClientState		_state;
 		std::string		_ip_string;
 		std::string		_port;
 		int				_sock_fd;

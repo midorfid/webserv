@@ -49,4 +49,5 @@ class Server {
         void    		handle_client_event(int client_fd);
 
         bool            isExpired(int cfg_lim, const time_t &client_tm);
+        void            checkTimeouts();
 };

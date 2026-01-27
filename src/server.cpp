@@ -166,16 +166,29 @@ Server::handle_cgi_read(int read_fd) {
 		// disconnect_client(client_fd);
 	}
 }
+
+void	Server::checkTimeouts() {
+	std::multimap<time_t, int>		keepAliveTimers;
+
+
+	while (!keepAliveTimers.empty()) {
+		std::multimap<time_t,int>::iterator it = keepAliveTimers.begin();
+
+		if (isExpired(_config.getKeepAliveTimer(), it->first)) {
+			disconnect_client(it->second);
+			keepAliveTimers.erase(it);
+		}
+		else
+			break;
+	}
+}
+
 void	Server::run_event_loop(epoll_event *ev) {
 	int                 			conn_sock, nfds;
 	struct epoll_event				events[MAX_EVENTS];
-	std::multimap<time_t, int>		timed_conns;
 
 	for (;;) {
-		int wait_time = -1;
-		if (!timed_conns.empty())
-			wait_time = static_cast<int>(time(NULL) - timed_conns.begin()->first);
-		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, wait_time);
+		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, 1000);
 		if (nfds == -1) {
 			logTime(ERRLOG);
 			fprintf(stderr, "epoll_wait: %s\n", strerror(errno));
@@ -229,16 +242,7 @@ void	Server::run_event_loop(epoll_event *ev) {
 				handle_client_event(events[i].data.fd); // add return value in case the client needs to be disconnected TODO
 			}
 		}
-		while (!timed_conns.empty()) {
-			std::multimap<time_t,int>::iterator it = timed_conns.begin();
-
-			if (isExpired(_config.getKeepAliveTimer(), it->first)) {
-				disconnect_client(it->second);
-				timed_conns.erase(it);
-			}
-			else
-				break;
-		}
+		checkTimeouts();
 	}
 	
 }

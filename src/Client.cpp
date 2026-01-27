@@ -8,9 +8,8 @@
 #include "server.hpp"
 
 #define BUF_SIZE 4096
-#define MAX_REQUEST_SIZE 8192
 
-Client::Client() : _request_buffer(""), _keep_alive_timer(0), _parser(), _req(), _cgi_state(false) {}
+Client::Client() : _req_start_time(0), _state(IDLE), _request_buffer(""), _keep_alive_timer(0), _parser(), _req(), _cgi_state(false) {}
 
 Client::~Client() {}
 
@@ -43,22 +42,13 @@ Client::processNewData(Server *server) {
 
 	bytes_read = recv(_sock_fd, temp_buf, BUF_SIZE, 0);
 	if (bytes_read > 0) {
-		if (bytes_read > MAX_REQUEST_SIZE) {
-			logTime(REGLOG);
-			std::cout << "HTTP/1.1 413 Payload Too Large\n" << std::endl;
-			send(_sock_fd, "HTTP/1.1 413 Payload Too Large\r\n\r\n", 32, 0); // TODO
-			server->disconnect_client(_sock_fd);
-			return;
+		_request_buffer.reserve(sizeof(temp_buf));
+		_request_buffer.append(temp_buf);
+		// TODO potentially dynamically allocate memore if keep_alive
+		if (_parser.parse(_request_buffer, _req) == ParseRequest::ParsingComplete) {
+			_is_ready = true;
 		}
-		else {
-    		_request_buffer.reserve(sizeof(temp_buf));
-    		_request_buffer.append(temp_buf);
-    		// TODO potentially dynamically allocate memore if keep_alive
-    		if (_parser.parse(_request_buffer, _req) == ParseRequest::ParsingComplete) {
-				_is_ready = true;
-			}
-			return;
-		}
+		return;
 	}
 	else if (bytes_read == 0) {
 		logTime(REGLOG);
