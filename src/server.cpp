@@ -348,9 +348,8 @@ Server::handle_client_event(int client_fd) {
 		client.processNewData(this);
 		
 		if (client.ready()) {
-			if (_route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip()))
-				// handle access denied
-			_handler.handle(_config, client.req(), client_fd, client.cgi_state());
+			ResolvedAction action = _route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip());
+			_handler.handle(_config, client.req(), client_fd, client.cgi_state(), action);
 			const CgiInfo &cgi = client.cgi_state();
 			if (cgi.isCgi()) {
 				epoll_add_cgi(std::make_pair(cgi.getReadfd(), cgi.getWritefd()), client_fd);

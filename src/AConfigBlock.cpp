@@ -6,8 +6,10 @@ bool AConfigBlock::getDirective(const std::string &key, std::string &out_val) co
 	std::map<std::string, std::string>::const_iterator	it;
 
 	it = _directives.find(key);
-	if (it == _directives.end())
+	if (it == _directives.end()) {
+		out_val = "";
 		return false;
+	}
 	out_val = it->second;
 	return true;
 }

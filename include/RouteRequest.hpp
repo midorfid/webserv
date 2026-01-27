@@ -31,6 +31,9 @@ class RouteRequest {
 
 	private:
 
+		const std::string	&catPathes(const std::string &reqPath, std::string &root_path, struct stat *st);
+		ResolvedAction		resolveRedirect(const std::string &dir_path, struct stat *st);
+		bool				NoSlash(const std::string &str);
 		ResolvedAction		PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg);
 		bool				checkLimitExcept(const std::string &method, const std::string &client_ip);
         const Location      *findBestLocationMatch(const Config &serv_cfg, const std::string &url);
@@ -41,6 +44,6 @@ class RouteRequest {
 								const Location *location);
 		bool				findAccessibleIndex(ResolvedAction &action, const std::string &dir_path,
 								const std::vector<std::string> &indexes);
-        ResolvedAction      checkReqPath(const std::string &path, const Config &cfg, const Location *location);
-        ResolvedAction      resolveCgiScript(const Location *loc, const Config &serv_cfg, const HttpRequest &req);
+        ResolvedAction      checkReqPath(const std::string &path, const Config &cfg, const Location *location, struct stat *st);
+        ResolvedAction      resolveCgiScript(const Location *loc, const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, struct stat *st);
 };

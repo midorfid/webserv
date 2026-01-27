@@ -26,7 +26,7 @@
 // content-type get filetype and charset from the file?
 // connection close/redirect/?
 
-std::string		RequestHandler::getHttpDate() {
+std::string		RequestHandler::getHttpDate() const{
 	time_t now = time(NULL);
 
 	struct tm *gmt_time = gmtime(&now);
@@ -38,7 +38,7 @@ std::string		RequestHandler::getHttpDate() {
 	return std::string(buffer);
 }
 
-const std::string	RequestHandler::create_404_response() {
+const std::string	RequestHandler::create_404_response() const{
 	const std::string		body = "<!DOCTYPE html><html><body><h1>404 Not Found</h1></body></html>";
 
 	std::stringstream		response;
@@ -55,7 +55,7 @@ const std::string	RequestHandler::create_404_response() {
 	return response.str();
 }
 
-const std::string	RequestHandler::create_403_response() {
+const std::string	RequestHandler::create_403_response() const{
 	const std::string		body = "<!DOCTYPE html><html><body><h1>403 Forbidden</h1></body></html>";
 	
 	std::stringstream		response;
@@ -72,7 +72,7 @@ const std::string	RequestHandler::create_403_response() {
 	return response.str();
 }
 
-const std::string	RequestHandler::create_500_response() {
+const std::string	RequestHandler::create_500_response() const{
 	const std::string		body = "<!DOCTYPE html><html><body><h1>500 Internal Server Error</h1></body></html>";
 	
 	std::stringstream		response;
@@ -89,7 +89,7 @@ const std::string	RequestHandler::create_500_response() {
 	return response.str();
 }
 
-const std::string RequestHandler::generic_error_response() {
+const std::string RequestHandler::generic_error_response() const{
 	const std::string body = "<!DOCTYPE html><html><body><h1>Error</h1></body></html>";
 		
 	std::stringstream		response;
@@ -106,7 +106,7 @@ const std::string RequestHandler::generic_error_response() {
 	return response.str();
 }
 
-const std::string	RequestHandler::getDefaultError(int status_code) {
+const std::string	RequestHandler::getDefaultError(int status_code) const{
 	switch(status_code) {
 		case 404:
 			return create_404_response();
@@ -121,7 +121,7 @@ const std::string	RequestHandler::getDefaultError(int status_code) {
 
 
 
-const std::string RequestHandler::createSuccResponseHeaders(long int contentLen) {
+const std::string RequestHandler::createSuccResponseHeaders(long int contentLen) const{
 	std::stringstream		response;
 
 	response << "HTTP/1.1 200 Success\r\n";
@@ -135,7 +135,7 @@ const std::string RequestHandler::createSuccResponseHeaders(long int contentLen)
 	return response.str();
 }
 
-void	RequestHandler::sendString(int client_fd, const std::string &response) {
+void	RequestHandler::sendString(int client_fd, const std::string &response) const{
 	ssize_t total_sent;
 	ssize_t to_send;
 
@@ -150,7 +150,7 @@ void	RequestHandler::sendString(int client_fd, const std::string &response) {
 	}
 }
 
-void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path) {
+void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path) const{
 	std::ifstream	file(file_path.c_str(), std::ios::binary);
 
 	char	buf[SBUF];
@@ -167,12 +167,12 @@ void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path)
 	}
 }
 
-void			RequestHandler::sendDefaultError(int status_code, int client_fd) {
+void			RequestHandler::sendDefaultError(int status_code, int client_fd) const{
 	const std::string error_str = getDefaultError(status_code);
 	sendString(client_fd, error_str);
 }
 
-void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) {
+void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) const{
 	long int file_size = action.st.st_size;
 	
 	const std::string response = createSuccResponseHeaders(file_size);
@@ -180,7 +180,7 @@ void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) {
 	streamFileBody(client_fd, action.target_path);
 }
 
-std::string		RequestHandler::createDirListHtml(const std::string &physical_path, const std::string &logic_path) {
+std::string		RequestHandler::createDirListHtml(const std::string &physical_path, const std::string &logic_path) const{
 	std::string html_body = "<!DOCTYPE html>\r\n"
 						"<html lang=en>\r\n"
 						"<head>\r\n"
@@ -219,7 +219,7 @@ std::string		RequestHandler::createDirListHtml(const std::string &physical_path,
 	return html_body;
 }
 
-void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, const std::string &logic_path) {
+void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, const std::string &logic_path) const{
 	const std::string html_body = createDirListHtml(phys_path, logic_path);
 
 	sendString(client_fd, createSuccResponseHeaders(html_body.length()));
@@ -227,11 +227,26 @@ void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, cons
 }
 
 void handlePost(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
-
+	//1) try to post
+	
+	//2) send response
 }
 
+void RequestHandler::redirect(int client_fd, const std::string &new_path) const{
+	std::stringstream		response;
 
-void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, CgiInfo &state) {
+	response << "HTTP/1.1 301 Moved Permanently\r\n";
+	response << "Date: " << getHttpDate() << "\r\n";
+	response << "Server: " << "Webserv/ver 1.0\r\n";
+	response << "Content-Type: " << new_path << "\r\n";
+	response << "Content-Length: 0" << "\r\n";
+	response << "Connection: keep-alive\r\n";
+	response << "\r\n";
+
+	sendString(client_fd, response.str());
+}
+
+void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
 	if (req.getMethod() == "GET" || req.getMethod() == "POST") { // post?
 		switch (action.type) {
 			case ACTION_SERVE_FILE:
@@ -242,6 +257,8 @@ void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int 
 				return sendDir(action.target_path, client_fd, req.getPath());
 			case ACTION_CGI:
 				return state.addFds(action.cgi_fds.first, action.cgi_fds.second); // return 200 status code?
+			case ACTION_REDIRECT:
+				return redirect(client_fd, action.target_path);
 			default:
 				return sendDefaultError(500, client_fd);
 		}

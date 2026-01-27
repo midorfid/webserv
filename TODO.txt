@@ -17,6 +17,8 @@ File System Hierarhy Standard for Server in docker/cmake
 
 KEEP ALIVE TIMER!!! -> works, might've forgotten something
 
+change hardcoded keep-alive header in the responses to client specific
+
 Stream send files to the client.
 
 SET UP LOGS -> make run ||| Apparently, I gotta create the files when I init Log class, can create the dir in cmake tho TODO

@@ -1,4 +1,9 @@
 #include "RouteRequest.hpp"
+#include "Environment.hpp"
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include "log.hpp"
 
 const Location	*findBestLocationMatch(const Config &serv_cfg, const std::string &url) {
 	const Location	*best_match = NULL;
@@ -75,11 +80,27 @@ bool	RouteRequest::findAccessibleIndex(ResolvedAction &action, const std::string
 	return false;
 }
 
+bool RouteRequest::NoSlash(const std::string &str) {
+	return (str.back() == '/') ? false : true;
+}
+
+ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, struct stat *st) {
+	ResolvedAction	action;
+
+	action.st = *st;
+	action.status_code = 301;
+	action.target_path = dir_path + '/';
+	action.type = ACTION_REDIRECT;
+	return action;
+}
+
 ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const Config &cfg,
 												struct stat *st, const Location *location) {
 	ResolvedAction				action;
 	std::vector<std::string>	indexes;
 
+	if (NoSlash(dir_path))
+		return resolveRedirect(dir_path, st);
 	if (location->getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
 		return action;
 	if (cfg.getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
@@ -96,10 +117,8 @@ ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const
 }
 
 
-ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location) {
-	struct stat st;
-
-	if (stat(path.c_str(), &st) != 0) {
+ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location, struct stat *st) {
+	if (stat(path.c_str(), st) != 0) {
 		switch(errno) {
 			case ENOENT:
 				return resolveErrorAction(404, cfg);
@@ -109,11 +128,11 @@ ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config 
 				return resolveErrorAction(500, cfg);
 		}
 	}
-	if (S_ISDIR(st.st_mode)) {
-		return resolveDirAction(path, cfg, &st, location);
+	if (S_ISDIR(st->st_mode)) {
+		return resolveDirAction(path, cfg, st, location);
 	}
-	else if (S_ISREG(st.st_mode))
-		return resolveFileAction(path, &st);
+	else if (S_ISREG(st->st_mode))
+		return resolveFileAction(path, st);
 	//Fallback
 	return resolveErrorAction(403, cfg);
 }
@@ -133,68 +152,45 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	return PathFinder(req, *location, serv_cfg);
 }
 
+const std::string &RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st) {
+	std::string full_path = root_path + reqPath; // query?? TODO
+
+	if (stat(full_path.c_str(), st) != 0) {
+		logTime(ERRLOG);
+		std::cerr << "RouteRequest::catPathes() stat() failed :(" << std::endl;
+	}
+
+	return full_path;
+}
+
 ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg) {
-	const std::string &req_path = req.getPath();
+	std::string root_path;
+	struct stat st;
+
+	loc.getDirective("root", root_path);
+	const std::string &full_path = catPathes(req.getPath(), root_path, &st);
 	
-	if (loc.isCgiRequest(req_path)) {
-		return resolveCgiScript(&loc, serv_cfg, req);
-	}
-	if (isDirRequest())
-	std::string index;
-
-		if (!location->getIndex(index))
-
-			return resolveErrorAction(404, serv_cfg);
-
-		struct stat st;
-
-		std::string physAndIdxPath = phys_path + index;
-
-		if (stat(physAndIdxPath.c_str(), &st) == 0) {
-
-			return resolveFileAction(physAndIdxPath, &st);
-
-		} // handle if index not found, autoindex off TODO as well as multiple indexes
-
-		return resolveErrorAction(404, serv_cfg);
+	if (loc.isCgiRequest(full_path)) {
+		return resolveCgiScript(&loc, serv_cfg, req, full_path, &st);
 	}
 
-	if (normalizePath(phys_path) == false) {
-
-		return resolveErrorAction(404, serv_cfg);
-
-	}
-
-	return checkReqPath(phys_path, serv_cfg, location);
-
+	return checkReqPath(full_path, serv_cfg, &loc, &st);
 }
 
 ResolvedAction
-RouteRequest::resolveCgiScript(const Location *loc, const Config &serv_cfg, const HttpRequest &req) {
-	std::string root_path;
-
-	loc->getDirective("root", root_path);
-	std::string scriptPhysAddr = root_path + req.getPath(); // query?? TODO
-
-	if (normalizePath(scriptPhysAddr) == false)
-		resolveErrorAction(404, serv_cfg);
-
-	struct stat st;
-
-	if (stat(scriptPhysAddr.c_str(), &st) != 0) {
-		std::cerr << "script stat() failed :(" << std::endl;
-		resolveErrorAction(403, serv_cfg);
-	}
+RouteRequest::resolveCgiScript(const Location *loc, const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, struct stat *st) {
 	pid_t	cpid;
 	int		serv_to_cgi[2];
 	int		cgi_to_serv[2];
 
 	if (pipe(serv_to_cgi) == -1 || pipe(cgi_to_serv) == -1) {
+		logTime(ERRLOG);
 		std::cerr << "pipe" << std::endl;
 		resolveErrorAction(500, serv_cfg);
 	}
 	cpid = fork();
 	if (cpid == -1) {
+		logTime(ERRLOG);
 		std::cerr << "fork" << std::endl;
 		resolveErrorAction(500, serv_cfg);
 	}
@@ -203,10 +199,12 @@ RouteRequest::resolveCgiScript(const Location *loc, const Config &serv_cfg, cons
 		close(serv_to_cgi[1]);
 
 		if (dup2(serv_to_cgi[0], STDIN_FILENO) == -1) {
+			logTime(ERRLOG);
 			std::cerr << "dup2" << std::endl;
 			resolveErrorAction(500, serv_cfg);
 		}
 		if (dup2(cgi_to_serv[1], STDOUT_FILENO) == -1) {
+			logTime(ERRLOG);
 			std::cerr << "dup2" << std::endl;
 			resolveErrorAction(500, serv_cfg);
 		}
@@ -222,8 +220,10 @@ RouteRequest::resolveCgiScript(const Location *loc, const Config &serv_cfg, cons
 		char *program = const_cast<char*>("../www/script.py");
 
 		char *const argv[] = {intep, program, NULL};
-		std::cerr << "script path: " << scriptPhysAddr << std::endl;
+		logTime(REGLOG);
+		std::cerr << "script path: " << full_path << std::endl;
 		if (execve(program, argv, envp_builder.getEnvp()) == -1) {
+			logTime(ERRLOG);
 			std::cerr << "execve error" << std::endl;
 			std::cerr << strerror(errno) << std::endl;
 		}
@@ -235,16 +235,17 @@ RouteRequest::resolveCgiScript(const Location *loc, const Config &serv_cfg, cons
 		
 		if (fcntl(serv_to_cgi[1], F_SETFL, O_NONBLOCK) == -1 ||
 			fcntl(cgi_to_serv[0], F_SETFL, O_NONBLOCK) == -1) {
+				logTime(ERRLOG);
 				std::cerr << "fcntl" << std::endl;
 				resolveErrorAction(500, serv_cfg);
 		}
 		
 		ResolvedAction	action;
 		
-		action.st = st;
+		action.st = *st;
 		action.type = ACTION_CGI;
 		action.status_code = 200;
-		action.target_path = scriptPhysAddr;
+		action.target_path = full_path;
 		action.cgi_fds.first = cgi_to_serv[0];
 		action.cgi_fds.second = serv_to_cgi[1];
 

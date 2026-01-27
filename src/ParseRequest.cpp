@@ -142,7 +142,7 @@ ParseRequest::BodyState	ParseRequest::parseBody(size_t eoh_pos, const std::strin
 	return BodySent;
 }
 
-std::string	&normalizePath(const std::string &req_path) {
+std::string	normalizePath(const std::string &req_path) {
 	std::vector<std::string>	stack;
 	std::stringstream			ss(req_path);
 	std::string					token;
