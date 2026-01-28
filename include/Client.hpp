@@ -8,6 +8,14 @@
 
 class Server;
 
+enum RequestStatus {
+	UrlTooLong,
+	RequestReceived,
+	RequestIncomplete,
+	Error,
+	NothingToRead,
+};
+
 enum ClientState {
 	IDLE,
 	READING_HEADERS,
@@ -30,10 +38,11 @@ class Client {
 	
 	const HttpRequest &req() const;
 	
-	void processNewData(Server *server);
+	RequestStatus processNewData();
 	
+	void				updateKeepAliveT();
+	bool				isKeepAliveConn() const;
 	std::string const	&ip() const;
-	bool				ready() const;
 	std::string const	&port() const;
 	void				reset();
 	CgiInfo				&cgi_state();
@@ -41,14 +50,13 @@ class Client {
 	private:
 	
 		time_t			_req_start_time;
+        time_t			_keep_alive_timer;
 		ClientState		_state;
 		std::string		_ip_string;
 		std::string		_port;
 		int				_sock_fd;
 
-		bool			_is_ready;
 		std::string		_request_buffer;
-        int				_keep_alive_timer;
         ParseRequest    _parser;
 		HttpRequest     _req;
 		CgiInfo			_cgi_state;

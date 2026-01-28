@@ -298,7 +298,6 @@ Server::~Server() {
 }
 
 Server::Server(const Server &other) { *this = other; }
-
 Server &Server::operator=(const Server &other) {
 	if (this != &other) {
 		this->_listen_sock = other._listen_sock;
@@ -344,22 +343,49 @@ Server::getClientAddr(struct sockaddr_storage &client_addr) {
 }
 
 void
+Server::handleDefault(Client &client, int client_fd) {
+	ResolvedAction action = _route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip());
+
+	_handler.handle(_config, client.req(), client_fd, client.cgi_state(), action);
+
+	const CgiInfo &cgi = client.cgi_state();
+
+	if (cgi.isCgi()) {
+		epoll_add_cgi(std::make_pair(cgi.getReadfd(), cgi.getWritefd()), client_fd);
+	}
+	disconnect_ifNoKeepAlive(client, client_fd);
+}
+
+void
+Server::handleLongUrl(int client_fd) {
+	send(client_fd, "HTTP/1.1 414 URl Too Long\r\nContent-Length: 0\r\n\r\n", 49, 0);
+	disconnect_client(client_fd);
+}
+
+void
+Server::disconnect_ifNoKeepAlive(Client &client, int client_fd) {
+	if (!client.isKeepAliveConn())
+		return disconnect_client(client_fd);
+	client.reset();
+}
+
+void
 Server::handle_client_event(int client_fd) {
 	try {
-		
 		Client &client = _clients.at(client_fd);
 		
-		client.processNewData(this);
-		
-		if (client.ready()) {
-			ResolvedAction action = _route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip());
-			_handler.handle(_config, client.req(), client_fd, client.cgi_state(), action);
-			const CgiInfo &cgi = client.cgi_state();
-			if (cgi.isCgi()) {
-				epoll_add_cgi(std::make_pair(cgi.getReadfd(), cgi.getWritefd()), client_fd);
-			}
-			else
-				client.reset(); // dunno when to reset yet TODO
+		RequestStatus status = client.processNewData();
+		switch (status) {
+			case UrlTooLong:
+				return handleLongUrl(client_fd); // 414
+			case RequestReceived:
+				return handleDefault(client, client_fd);
+			case RequestIncomplete:
+				return;
+			case Error:
+				return disconnect_client(client_fd);
+			case NothingToRead:
+				return disconnect_ifNoKeepAlive(client, client_fd);
 		}
 	}
 	catch(const std::exception& e)

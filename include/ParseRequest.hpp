@@ -15,6 +15,11 @@ class ParseRequest {
 			ParsingIncomplete,
 		};
 
+		enum FirstLineState {
+			UrlTooLong,
+			AllGood,
+		};
+
 		enum BodyState {
 			BodyNotSent,
 			BodySent,
@@ -33,7 +38,7 @@ class ParseRequest {
 	private:
 		std::string						getNextLine(std::string &request);
 		std::vector<std::string>    	tokenizeFirstLine(const std::string &first_line);
-		void							parseFirstLine(std::string &_current_line, HttpRequest &req);
+		FirstLineState					parseFirstLine(std::string &_current_line, HttpRequest &req);
 		template <typename T>
 		std::string						trimToken(std::string &src, T token);
 		void							trimLeftWhitespace(std::string &to_trim);

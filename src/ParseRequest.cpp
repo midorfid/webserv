@@ -12,6 +12,7 @@
 #define	EOL	"\r\n"
 #define	EOH	"\r\n\r\n"
 #define SPACE ' '
+#define MAX_URL_LENGTH 2048
 
 /* Finds token in the src, if it's not there returns the src. */
 template <typename T>
@@ -108,12 +109,15 @@ void		ParseRequest::trimLeftWhitespace(std::string &to_trim) {
 	}
 }
 
-void		ParseRequest::parseFirstLine(std::string &_current_line, HttpRequest &req) {
+ParseRequest::FirstLineState		ParseRequest::parseFirstLine(std::string &_current_line, HttpRequest &req) {
 	std::vector<std::string> first_line = tokenizeFirstLine(_current_line);
 
 	parseMethod(first_line[0], req);
+	if (first_line[1].length() > MAX_URL_LENGTH)
+		return UrlTooLong;
 	parsePathAndQuery(first_line[1], req);
 	parseHttpVer(first_line[2], req);
+	return AllGood;
 }
 
 ParseRequest::BodyState	ParseRequest::parseBody(size_t eoh_pos, const std::string &raw_request, HttpRequest &req) {
@@ -183,7 +187,8 @@ ParseRequest::ParseResult ParseRequest::parse(const std::string &raw_request, Ht
 	reqNoBody = raw_request.substr(0, eoh_pos + 2);
 	
 	_current_line = trimToken(reqNoBody, EOL);
-	parseFirstLine(_current_line, req);
+	if (parseFirstLine(_current_line, req) == UrlTooLong)
+		return ParsingError;
 	
 	parseHeaders(reqNoBody, req);
 

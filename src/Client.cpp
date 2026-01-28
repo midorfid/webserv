@@ -9,7 +9,7 @@
 
 #define BUF_SIZE 4096
 
-Client::Client() : _req_start_time(0), _state(IDLE), _request_buffer(""), _keep_alive_timer(0), _parser(), _req(), _cgi_state(false) {}
+Client::Client() : _req_start_time(0), _state(IDLE), _request_buffer(""), _keep_alive_timer(time(NULL)), _parser(), _req(), _cgi_state(false) {}
 
 Client::~Client() {}
 
@@ -35,8 +35,8 @@ Client::req() const {
 }
 
 
-void
-Client::processNewData(Server *server) {
+RequestStatus
+Client::processNewData() {
     ssize_t				bytes_read;
 	char				temp_buf[BUF_SIZE];
 
@@ -45,22 +45,29 @@ Client::processNewData(Server *server) {
 		_request_buffer.reserve(sizeof(temp_buf));
 		_request_buffer.append(temp_buf);
 		// TODO potentially dynamically allocate memore if keep_alive
-		if (_parser.parse(_request_buffer, _req) == ParseRequest::ParsingComplete) {
-			_is_ready = true;
+		ParseRequest::ParseResult status = _parser.parse(_request_buffer, _req);
+		if (_req.getHeader("connection") != "keep-alive")
+			_keep_alive_timer = 0;
+		switch(status) {
+			case ParseRequest::ParseResult::ParsingComplete:
+				return RequestReceived;
+			case ParseRequest::ParseResult::ParsingIncomplete:
+				return RequestIncomplete;
+			case ParseRequest::ParseResult::ParsingError:
+				return UrlTooLong;
 		}
-		return;
 	}
 	else if (bytes_read == 0) {
 		logTime(REGLOG);
 		std::cout << "bytes_read == 0" << std::endl;
-        server->disconnect_client(_sock_fd);
+		return NothingToRead;
 		// handle timed_conns if disconnect here TODO
 		// rather reset if keep_alive
 	}
 	else {
 		logTime(ERRLOG);
 		fprintf(stderr, "Client: %s port\n", strerror(errno));
-        server->disconnect_client(_sock_fd);
+		return Error;
 	}
 }
 
@@ -75,20 +82,28 @@ Client::port() const {
     return _port;
 }
 
-bool
-Client::ready() const {
-	return _is_ready;
-}
-
 void
 Client::reset() {
 	_request_buffer.clear();
 	_req = HttpRequest();
-	_is_ready = false;
+	_keep_alive_timer = time(NULL);
+	_req_start_time = 0;
 	_cgi_state = CgiInfo(false);
 }
 
-Client::Client(std::string &ip, std::string &port, int sock_fd) : _ip_string(ip), _port(port), _sock_fd(sock_fd), _is_ready(false) {
+void
+Client::updateKeepAliveT() {
+	_keep_alive_timer = time(NULL);
+}
+
+bool
+Client::isKeepAliveConn() const {
+	return _keep_alive_timer != 0;
+}
+
+
+Client::Client(std::string &ip, std::string &port, int sock_fd) : _ip_string(ip), _port(port), _sock_fd(sock_fd),
+		_req_start_time(0), _state(IDLE), _request_buffer(""), _keep_alive_timer(time(NULL)), _parser(), _req(), _cgi_state(false) {
 	logTime(REGLOG);
 	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
 }
