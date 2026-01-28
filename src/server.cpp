@@ -235,7 +235,6 @@ void	Server::run_event_loop(epoll_event *ev) {
 					std::pair<std::string, std::string> ipPort = getClientAddr(client_addr);
 					_clients[conn_sock] = Client(ipPort.first, ipPort.second, conn_sock);
 					logTime(REGLOG);
-					timed_conns.emplace(std::make_pair(time(NULL), conn_sock));
 					std::cout << "New connection on fd " << conn_sock << std::endl;
 				}
 			}

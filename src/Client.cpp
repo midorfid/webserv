@@ -44,8 +44,10 @@ Client::processNewData() {
 	if (bytes_read > 0) {
 		_request_buffer.reserve(sizeof(temp_buf));
 		_request_buffer.append(temp_buf);
+		// add "\r\n\r\n" check and max_header_size -> error 431
 		// TODO potentially dynamically allocate memore if keep_alive
 		ParseRequest::ParseResult status = _parser.parse(_request_buffer, _req);
+		// error 413  for too large body, check config
 		if (_req.getHeader("connection") == "close")
 			_last_activity = 0;
 		switch(status) {
