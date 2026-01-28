@@ -167,19 +167,27 @@ Server::handle_cgi_read(int read_fd) {
 	}
 }
 
-void	Server::checkTimeouts() {
-	std::multimap<time_t, int>		keepAliveTimers;
+double
+Server::diffTime(const time_t &client_tm) {
+	time_t now = time(NULL);
+	
+	return static_cast<double>(now - client_tm);
+}
 
+void	Server::checkTimeouts() { //here
+	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+		double quiet_time = diffTime(it->second.getLastActivity());
 
-	while (!keepAliveTimers.empty()) {
-		std::multimap<time_t,int>::iterator it = keepAliveTimers.begin();
-
-		if (isExpired(_config.getKeepAliveTimer(), it->first)) {
-			disconnect_client(it->second);
-			keepAliveTimers.erase(it);
+		if (it->second.getClientState() != IDLE) {
+			if (quiet_time > 60) {
+				_handler.sendDefaultError(408, it->first);
+				disconnect_client(it->first);
+			}
 		}
-		else
-			break;
+		else {
+			if (quiet_time > static_cast<double>(_config.getKeepAliveTimer()))
+				disconnect_client(it->first);
+		}
 	}
 }
 
@@ -247,12 +255,6 @@ void	Server::run_event_loop(epoll_event *ev) {
 	
 }
 
-bool
-Server::isExpired(int cfg_lim, const time_t &client_tm) {
-	time_t curr_tm = time(NULL);
-	// std::cout << "Time diff:" << curr_tm - client_tm << std::endl; 
-	return (curr_tm - client_tm) > cfg_lim ? true : false;
-}
 
 bool
 Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
@@ -358,7 +360,7 @@ Server::handleDefault(Client &client, int client_fd) {
 
 void
 Server::handleLongUrl(int client_fd) {
-	send(client_fd, "HTTP/1.1 414 URl Too Long\r\nContent-Length: 0\r\n\r\n", 49, 0);
+	_handler.sendDefaultError(414, client_fd);
 	disconnect_client(client_fd);
 }
 

@@ -38,88 +38,20 @@ std::string		RequestHandler::getHttpDate() const{
 	return std::string(buffer);
 }
 
-const std::string	RequestHandler::create_404_response() const{
-	const std::string		body = "<!DOCTYPE html><html><body><h1>404 Not Found</h1></body></html>";
-
-	std::stringstream		response;
-
-	response << "HTTP/1.1 404 not Found\r\n";
-	response << "Date: " << getHttpDate() << "\r\n";
-	response << "Server: " << "Webserv/ver 1.0\r\n";
-	response << "Content-Type: text/html\r\n";
-	response << "Content-Length: " << body.length() << "\r\n";
-	response << "Connection: close\r\n";
-	response << "\r\n";
-	response << body;
-
-	return response.str();
-}
-
-const std::string	RequestHandler::create_403_response() const{
-	const std::string		body = "<!DOCTYPE html><html><body><h1>403 Forbidden</h1></body></html>";
-	
-	std::stringstream		response;
-
-	response << "HTTP/1.1 403 Access Forbidden\r\n";
-	response << "Date: " << getHttpDate() << "\r\n";
-	response << "Server: " << "Webserv/ver 1.0\r\n";
-	response << "Content-Type: text/html\r\n";
-	response << "Content-Length: " << body.length() << "\r\n";
-	response << "Connection: close\r\n";
-	response << "\r\n";
-	response << body;
-
-	return response.str();
-}
-
-const std::string	RequestHandler::create_500_response() const{
-	const std::string		body = "<!DOCTYPE html><html><body><h1>500 Internal Server Error</h1></body></html>";
-	
-	std::stringstream		response;
-
-	response << "HTTP/1.1 500 Internal Server Error\r\n";
-	response << "Date: " << getHttpDate() << "\r\n";
-	response << "Server: " << "Webserv/ver 1.0\r\n";
-	response << "Content-Type: text/html\r\n";
-	response << "Content-Length: " << body.length() << "\r\n";
-	response << "Connection: close\r\n";
-	response << "\r\n";
-	response << body;
-
-	return response.str();
-}
-
-const std::string RequestHandler::generic_error_response() const{
-	const std::string body = "<!DOCTYPE html><html><body><h1>Error</h1></body></html>";
-		
-	std::stringstream		response;
-
-	response << "HTTP/1.1 Error\r\n";
-	response << "Date: " << getHttpDate() << "\r\n";
-	response << "Server: " << "Webserv/ver 1.0\r\n";
-	response << "Content-Type: text/html\r\n";
-	response << "Content-Length: " << body.length() << "\r\n";
-	response << "Connection: close\r\n";
-	response << "\r\n";
-	response << body;
-
-	return response.str();
-}
-
-const std::string	RequestHandler::getDefaultError(int status_code) const{
-	switch(status_code) {
-		case 404:
-			return create_404_response();
-		case 403:
-			return create_403_response();
-		case 500:
-			return create_500_response();
-		default:
-			return generic_error_response();
+const std::string	RequestHandler::getStatusText(int code) const{
+	switch (code) {
+	case 403: return "Forbidden";
+	case 404: return "Not Found";
+	case 500: return "Internal Server Error";
+	case 200: return "OK";
+	case 400: return "Bad Request";
+	case 405: return "Method Not Allowed";
+	case 408: return "Request Timeout";
+	case 413: return "Payload Too Large";
+	case 414: return "URl Too Long";
+	default: return "Error";
 	}
 }
-
-
 
 const std::string RequestHandler::createSuccResponseHeaders(long int contentLen) const{
 	std::stringstream		response;
@@ -168,8 +100,22 @@ void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path)
 }
 
 void			RequestHandler::sendDefaultError(int status_code, int client_fd) const{
-	const std::string error_str = getDefaultError(status_code);
-	sendString(client_fd, error_str);
+	const std::string &errorText = getStatusText(status_code);
+	const std::string &codeAndText = std::to_string(status_code) + " " + errorText;
+	const std::string body = "<!DOCTYPE html><html><body><h1>" + codeAndText + "</h1></body></html>";
+
+	std::stringstream		response;
+
+	response << "HTTP/1.1 " + codeAndText + "\r\n";
+	response << "Date: " << getHttpDate() << "\r\n";
+	response << "Server: " << "Webserv/ver 1.0\r\n";
+	response << "Content-Type: text/html\r\n";
+	response << "Content-Length: " << body.length() << "\r\n";
+	response << "Connection: close\r\n";
+	response << "\r\n";
+	response << body;
+
+	sendString(client_fd, response.str());
 }
 
 void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) const{

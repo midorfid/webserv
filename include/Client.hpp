@@ -40,7 +40,9 @@ class Client {
 	
 	RequestStatus processNewData();
 	
-	void				updateKeepAliveT();
+	const ClientState	&getClientState() const;
+	const time_t		&getLastActivity() const;
+	void				updateLastActivity();
 	bool				isKeepAliveConn() const;
 	std::string const	&ip() const;
 	std::string const	&port() const;
@@ -50,7 +52,7 @@ class Client {
 	private:
 	
 		time_t			_req_start_time;
-        time_t			_keep_alive_timer;
+        time_t			_last_activity;
 		ClientState		_state;
 		std::string		_ip_string;
 		std::string		_port;

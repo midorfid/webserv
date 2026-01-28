@@ -50,6 +50,7 @@ class Server {
         void    		handle_new_connection();
         void    		handle_client_event(int client_fd);
 
-        bool            isExpired(int cfg_lim, const time_t &client_tm);
+        void            handleClientTimeout(int client_fd);
+        double          diffTime(const time_t &client_tm);
         void            checkTimeouts();
 };

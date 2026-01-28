@@ -9,7 +9,7 @@
 
 #define BUF_SIZE 4096
 
-Client::Client() : _req_start_time(0), _state(IDLE), _request_buffer(""), _keep_alive_timer(time(NULL)), _parser(), _req(), _cgi_state(false) {}
+Client::Client() : _req_start_time(0), _state(IDLE), _request_buffer(""), _last_activity(time(NULL)), _parser(), _req(), _cgi_state(false) {}
 
 Client::~Client() {}
 
@@ -18,7 +18,7 @@ Client::Client(const Client &other) { *this = other; }
 Client &Client::operator=(const Client &other) {
     if (this != &other) {
         this->_request_buffer = other._request_buffer;
-        this->_keep_alive_timer = other._keep_alive_timer;
+        this->_last_activity = other._last_activity;
         this->_parser = other._parser;
         this->_req = other._req;
 		this->_ip_string = other._ip_string;
@@ -46,8 +46,8 @@ Client::processNewData() {
 		_request_buffer.append(temp_buf);
 		// TODO potentially dynamically allocate memore if keep_alive
 		ParseRequest::ParseResult status = _parser.parse(_request_buffer, _req);
-		if (_req.getHeader("connection") != "keep-alive")
-			_keep_alive_timer = 0;
+		if (_req.getHeader("connection") == "close")
+			_last_activity = 0;
 		switch(status) {
 			case ParseRequest::ParseResult::ParsingComplete:
 				return RequestReceived;
@@ -71,6 +71,11 @@ Client::processNewData() {
 	}
 }
 
+const ClientState &
+Client::getClientState() const {
+	return _state;
+}
+
 
 std::string const &
 Client::ip() const {
@@ -86,24 +91,20 @@ void
 Client::reset() {
 	_request_buffer.clear();
 	_req = HttpRequest();
-	_keep_alive_timer = time(NULL);
+	_last_activity = time(NULL);
 	_req_start_time = 0;
 	_cgi_state = CgiInfo(false);
-}
-
-void
-Client::updateKeepAliveT() {
-	_keep_alive_timer = time(NULL);
+	_state = IDLE;
 }
 
 bool
 Client::isKeepAliveConn() const {
-	return _keep_alive_timer != 0;
+	return _last_activity != 0;
 }
 
 
 Client::Client(std::string &ip, std::string &port, int sock_fd) : _ip_string(ip), _port(port), _sock_fd(sock_fd),
-		_req_start_time(0), _state(IDLE), _request_buffer(""), _keep_alive_timer(time(NULL)), _parser(), _req(), _cgi_state(false) {
+		_req_start_time(0), _state(IDLE), _request_buffer(""), _last_activity(time(NULL)), _parser(), _req(), _cgi_state(false) {
 	logTime(REGLOG);
 	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
 }
