@@ -8,6 +8,7 @@
 #include "server.hpp"
 
 #define BUF_SIZE 4096
+#define MAX_HEADERS_SIZE 8192
 
 Client::Client() : _req_start_time(0), _state(IDLE), _request_buffer(""), _last_activity(time(NULL)), _parser(), _req(), _cgi_state(false) {}
 
@@ -44,6 +45,19 @@ Client::processNewData() {
 	if (bytes_read > 0) {
 		_request_buffer.reserve(sizeof(temp_buf));
 		_request_buffer.append(temp_buf);
+		if (getClientState() == READING_HEADERS) {
+			size_t endofheaders = _request_buffer.find("\r\n\r\n");
+
+			if (endofheaders == std::string::npos) {
+				if (_request_buffer.length() > MAX_HEADERS_SIZE) {
+					// ... 
+					return HeadersTooLarge;
+				}
+			}
+			else {
+				_state = READING_BODY;
+			}
+		}
 		// add "\r\n\r\n" check and max_header_size -> error 431
 		// TODO potentially dynamically allocate memore if keep_alive
 		ParseRequest::ParseResult status = _parser.parse(_request_buffer, _req);

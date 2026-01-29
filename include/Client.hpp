@@ -10,6 +10,7 @@ class Server;
 
 enum RequestStatus {
 	UrlTooLong,
+	HeadersTooLarge,
 	RequestReceived,
 	RequestIncomplete,
 	Error,
