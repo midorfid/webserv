@@ -347,7 +347,7 @@ void
 Server::handleDefault(Client &client, int client_fd) {
 	ResolvedAction action = _route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip());
 
-	_handler.handle(_config, client.req(), client_fd, client.cgi_state(), action);
+	_handler.handle(client.req(), client_fd, client.cgi_state(), action);
 
 	const CgiInfo &cgi = client.cgi_state();
 
@@ -358,8 +358,8 @@ Server::handleDefault(Client &client, int client_fd) {
 }
 
 void
-Server::handleLongUrl(int client_fd) {
-	_handler.sendDefaultError(414, client_fd);
+Server::terminateConnWithError(int client_fd, int error_code) {
+	_handler.sendDefaultError(error_code, client_fd);
 	disconnect_client(client_fd);
 }
 
@@ -375,11 +375,15 @@ Server::handle_client_event(int client_fd) {
 	try {
 		Client &client = _clients.at(client_fd);
 		
-		RequestStatus status = client.processNewData();
+		ParseResult status = client.processNewData(*this);
 		switch (status) {
 			case UrlTooLong:
-				return handleLongUrl(client_fd); // 414
-			case RequestReceived:
+				return terminateConnWithError(client_fd, 414);
+			case BodyTooLarge:
+				return terminateConnWithError(client_fd, 413);
+			case HeadersTooLarge:
+				return terminateConnWithError(client_fd, 431);
+			case RequestComplete:
 				return handleDefault(client, client_fd);
 			case RequestIncomplete:
 				return;
@@ -387,6 +391,8 @@ Server::handle_client_event(int client_fd) {
 				return disconnect_client(client_fd);
 			case NothingToRead:
 				return disconnect_ifNoKeepAlive(client, client_fd);
+			default:
+				return ;
 		}
 	}
 	catch(const std::exception& e)
@@ -394,4 +400,9 @@ Server::handle_client_event(int client_fd) {
 		logTime(ERRLOG);
 		std::cerr << e.what() << '\n';
 	}
+}
+
+const Config
+Server::getConfig() const{
+	return _config;
 }

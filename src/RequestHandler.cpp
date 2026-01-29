@@ -172,11 +172,11 @@ void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, cons
 	sendString(client_fd, html_body);
 }
 
-void handlePost(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
-	//1) try to post
+// void handlePost(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
+// 	//1) try to post
 	
-	//2) send response
-}
+// 	//2) send response
+// }
 
 void RequestHandler::redirect(int client_fd, const std::string &new_path) const{
 	std::stringstream		response;
@@ -192,7 +192,7 @@ void RequestHandler::redirect(int client_fd, const std::string &new_path) const{
 	sendString(client_fd, response.str());
 }
 
-void RequestHandler::handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
+void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
 	if (req.getMethod() == "GET" || req.getMethod() == "POST") { // post?
 		switch (action.type) {
 			case ACTION_SERVE_FILE:

@@ -24,6 +24,7 @@ class Server {
         std::pair<std::string, std::string>		getClientAddr(struct sockaddr_storage &client_addr);
 
         bool                                    epoll_add_cgi(std::pair<int, int> cgi_fds, int client_fd);
+        const Config                            getConfig() const;
 
     private:
 
@@ -38,7 +39,7 @@ class Server {
         std::map<int, int>                      _cgi_client;
         
         void            disconnect_ifNoKeepAlive(Client &client, int client_fd);
-        void            handleLongUrl(int client_fd);
+        void            terminateConnWithError(int client_fd, int error_code);
         void            handleDefault(Client &client, int client_fd);
         void            handle_cgi_write(int pipe_fd);
         void            handle_cgi_read(int pipe_fd);

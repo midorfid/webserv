@@ -16,7 +16,7 @@ class RequestHandler {
 		RequestHandler(const RequestHandler &other);
 		RequestHandler &operator=(const RequestHandler &other);
 		
-		void		handle(const Config &serv_cfg, const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const;
+		void		handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const;
 		void		sendDefaultError(int status_code, int client_fd) const;
 		
 	private:

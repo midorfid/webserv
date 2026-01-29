@@ -8,15 +8,6 @@
 
 class Server;
 
-enum RequestStatus {
-	UrlTooLong,
-	HeadersTooLarge,
-	RequestReceived,
-	RequestIncomplete,
-	Error,
-	NothingToRead,
-};
-
 enum ClientState {
 	IDLE,
 	READING_HEADERS,
@@ -39,7 +30,7 @@ class Client {
 	
 	const HttpRequest &req() const;
 	
-	RequestStatus processNewData();
+	ParseResult processNewData(Server &server);
 	
 	const ClientState	&getClientState() const;
 	const time_t		&getLastActivity() const;

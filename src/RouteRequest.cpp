@@ -152,7 +152,7 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	return PathFinder(req, *location, serv_cfg);
 }
 
-const std::string &RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st) {
+std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st) {
 	std::string full_path = root_path + reqPath; // query?? TODO
 
 	if (stat(full_path.c_str(), st) != 0) {
@@ -171,14 +171,14 @@ ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &
 	const std::string &full_path = catPathes(req.getPath(), root_path, &st);
 	
 	if (loc.isCgiRequest(full_path)) {
-		return resolveCgiScript(&loc, serv_cfg, req, full_path, &st);
+		return resolveCgiScript(serv_cfg, req, full_path, &st);
 	}
 
 	return checkReqPath(full_path, serv_cfg, &loc, &st);
 }
 
 ResolvedAction
-RouteRequest::resolveCgiScript(const Location *loc, const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, struct stat *st) {
+RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, struct stat *st) {
 	pid_t	cpid;
 	int		serv_to_cgi[2];
 	int		cgi_to_serv[2];

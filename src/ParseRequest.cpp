@@ -109,7 +109,7 @@ void		ParseRequest::trimLeftWhitespace(std::string &to_trim) {
 	}
 }
 
-ParseRequest::FirstLineState		ParseRequest::parseFirstLine(std::string &_current_line, HttpRequest &req) {
+ParseResult		ParseRequest::parseFirstLine(std::string &_current_line, HttpRequest &req) {
 	std::vector<std::string> first_line = tokenizeFirstLine(_current_line);
 
 	parseMethod(first_line[0], req);
@@ -117,33 +117,22 @@ ParseRequest::FirstLineState		ParseRequest::parseFirstLine(std::string &_current
 		return UrlTooLong;
 	parsePathAndQuery(first_line[1], req);
 	parseHttpVer(first_line[2], req);
-	return AllGood;
+	return Okay;
 }
 
-ParseRequest::BodyState	ParseRequest::parseBody(size_t eoh_pos, const std::string &raw_request, HttpRequest &req) {
+ParseResult	ParseRequest::parseBody(std::string &reqOnlyBody, HttpRequest &req) {
 	size_t	body_size = 0;
-	size_t	headers_size = eoh_pos + 4;
-	const std::string &method = req.getMethod();
-
-	if (method == "GET" || method == "DELETE" || method == "HEAD") {
-		return BodyNotSent;
-	}
-	logTime(REGLOG);
-	std::cout << "parsebodyqq\n" << std::endl;
 	try
 	{
 		body_size = std::atoi(req.getHeader("content-length").c_str());
 	}
-	catch(const std::exception& e)
-	{
-		std::cerr << e.what() << '\n';
-		return BodyError;
+	catch(const std::exception& e){}
+	if (body_size > 0 && reqOnlyBody.size() < body_size) {
+		return 	RequestIncomplete;
 	}
-	if (body_size > 0 && raw_request.size() < headers_size + body_size) {
-		return BodyIncomplete;
-	}
-	req.setBody(raw_request.substr(headers_size, body_size));// +1 ?
-	return BodySent;
+	req.setBody(reqOnlyBody);
+
+	return RequestComplete;
 }
 
 std::string	normalizePath(const std::string &req_path) {
@@ -176,28 +165,17 @@ std::string	normalizePath(const std::string &req_path) {
 	return norm_path;
 }
 
-ParseRequest::ParseResult ParseRequest::parse(const std::string &raw_request, HttpRequest &req) {
+ParseResult ParseRequest::parseReqLineHeaders(std::string &reqNoBody, HttpRequest &req) {
 	std::string				_current_line;
-	std::string				reqNoBody;
-	size_t					eoh_pos;
 
-	eoh_pos = raw_request.find(EOH);
-	if (eoh_pos == raw_request.npos)
-		return ParsingIncomplete;
-	reqNoBody = raw_request.substr(0, eoh_pos + 2);
 	
 	_current_line = trimToken(reqNoBody, EOL);
 	if (parseFirstLine(_current_line, req) == UrlTooLong)
-		return ParsingError;
+		return UrlTooLong;
 	
 	parseHeaders(reqNoBody, req);
-
-	if (parseBody(eoh_pos, raw_request, req) == BodyIncomplete)
-		return ParsingIncomplete;
-
 	req.setPath(normalizePath(req.getPath()));
-	
-	return ParsingComplete;
+	return Okay;
 }
 
 ParseRequest::ParseRequest() {}

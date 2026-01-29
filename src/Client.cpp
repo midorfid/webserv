@@ -10,7 +10,7 @@
 #define BUF_SIZE 4096
 #define MAX_HEADERS_SIZE 8192
 
-Client::Client() : _req_start_time(0), _state(IDLE), _request_buffer(""), _last_activity(time(NULL)), _parser(), _req(), _cgi_state(false) {}
+Client::Client() : _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
 
 Client::~Client() {}
 
@@ -36,13 +36,17 @@ Client::req() const {
 }
 
 
-RequestStatus
-Client::processNewData() {
+ParseResult
+Client::processNewData(Server &server) {
     ssize_t				bytes_read;
 	char				temp_buf[BUF_SIZE];
 
 	bytes_read = recv(_sock_fd, temp_buf, BUF_SIZE, 0);
 	if (bytes_read > 0) {
+		if (getClientState() == IDLE) {
+			_state = READING_HEADERS;
+			_req_start_time = time(NULL);
+		}
 		_request_buffer.reserve(sizeof(temp_buf));
 		_request_buffer.append(temp_buf);
 		if (getClientState() == READING_HEADERS) {
@@ -53,38 +57,41 @@ Client::processNewData() {
 					// ... 
 					return HeadersTooLarge;
 				}
+				return RequestIncomplete;
 			}
 			else {
+				ParseResult status = _parser.parseReqLineHeaders(_request_buffer, _req);
+				if (status != Okay)
+					return status;
+				if (std::atoi(_req.getHeader("content-length").c_str()) > server.getConfig().getMaxBodySize())
+					return BodyTooLarge;
+				if (_req.getHeader("connection") == "close")
+					_last_activity = 0;
+
 				_state = READING_BODY;
+			
+				_request_buffer.erase(0, endofheaders + 4);
 			}
 		}
-		// add "\r\n\r\n" check and max_header_size -> error 431
-		// TODO potentially dynamically allocate memore if keep_alive
-		ParseRequest::ParseResult status = _parser.parse(_request_buffer, _req);
-		// error 413  for too large body, check config
-		if (_req.getHeader("connection") == "close")
-			_last_activity = 0;
-		switch(status) {
-			case ParseRequest::ParseResult::ParsingComplete:
-				return RequestReceived;
-			case ParseRequest::ParseResult::ParsingIncomplete:
-				return RequestIncomplete;
-			case ParseRequest::ParseResult::ParsingError:
-				return UrlTooLong;
+		if (getClientState() == READING_BODY) {
+			if (_parser.parseBody(_request_buffer, _req) == RequestComplete) {
+				_state = WRITING_RESPONSE;
+				return RequestComplete;
+			}
+			return RequestIncomplete;
 		}
 	}
 	else if (bytes_read == 0) {
 		logTime(REGLOG);
 		std::cout << "bytes_read == 0" << std::endl;
 		return NothingToRead;
-		// handle timed_conns if disconnect here TODO
-		// rather reset if keep_alive
 	}
 	else {
 		logTime(ERRLOG);
 		fprintf(stderr, "Client: %s port\n", strerror(errno));
 		return Error;
 	}
+	return Okay;
 }
 
 const ClientState &
@@ -92,6 +99,10 @@ Client::getClientState() const {
 	return _state;
 }
 
+const time_t &
+Client::getLastActivity() const {
+	return _last_activity;
+}
 
 std::string const &
 Client::ip() const {
@@ -118,9 +129,8 @@ Client::isKeepAliveConn() const {
 	return _last_activity != 0;
 }
 
-
-Client::Client(std::string &ip, std::string &port, int sock_fd) : _ip_string(ip), _port(port), _sock_fd(sock_fd),
-		_req_start_time(0), _state(IDLE), _request_buffer(""), _last_activity(time(NULL)), _parser(), _req(), _cgi_state(false) {
+Client::Client(std::string &ip, std::string &port, int sock_fd) : _req_start_time(0), _last_activity(time(NULL)), _state(IDLE),
+		_ip_string(ip), _port(port), _sock_fd(sock_fd), _request_buffer(""), _parser(), _req(), _cgi_state(false) {
 	logTime(REGLOG);
 	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
 }

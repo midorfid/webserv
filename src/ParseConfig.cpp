@@ -144,6 +144,10 @@ void ParseConfig::parseBlock(AConfigBlock &block) {
 			std::string val = getNextToken().value;
 			static_cast<Config&>(block).setKeepAliveTimer(static_cast<int>(std::strtol(val.erase(val.length()-1).c_str(), NULL, 10)));
 		}
+		else if (key == "client_max_body_size") {
+			std::string val = getNextToken().value;
+			static_cast<Config&>(block).setMaxBodySize(static_cast<int>(std::strtol(val.erase(val.length()-1).c_str(), NULL, 10)));
+		}
 		else {
 			// std::cout << key << std::endl;
 			std::vector<std::string>	value;
