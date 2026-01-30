@@ -5,7 +5,7 @@
 #include <string.h>
 #include "log.hpp"
 
-const Location	*findBestLocationMatch(const Config &serv_cfg, const std::string &url) {
+const Location	*RouteRequest::findBestLocationMatch(const Config &serv_cfg, const std::string &url) {
 	const Location	*best_match = NULL;
 	size_t			longest_len = 0;
 	

@@ -77,3 +77,13 @@ int
 Config::getKeepAliveTimer(void) const{
     return _keepalive_timer;
 }
+
+void
+Config::setMaxBodySize(int lim) {
+    _max_body_size = lim;
+}
+
+int
+Config::getMaxBodySize() const {
+    return _max_body_size;
+}

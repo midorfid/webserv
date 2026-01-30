@@ -34,4 +34,5 @@ class Config : public AConfigBlock {
 		std::vector<Location>				_locations;
 		int									_port;
 		int									_keepalive_timer;
+		int									_max_body_size;
 };

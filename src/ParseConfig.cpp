@@ -24,7 +24,6 @@ void	ParseConfig::syntaxCheck() {
 
 void ParseConfig::parse(const std::string &cfg_path, Config &config) {
 	tokenize(cfg_path);
-	
 	syntaxCheck();
 	parseBlock(config);
 }
@@ -46,7 +45,7 @@ void	ParseConfig::parseLimitExceptB(Location	&loc) {
 			std::cerr << "Wrong method in limit_except block in the config. Ignoring '" << meth << "'." << std::endl; 
 		}
 	}
-	for (std::string access = getNextToken().value; access != "{"; access = getNextToken().value) {
+	for (std::string access = getNextToken().value; access != "}"; access = getNextToken().value) {
 		std::string accessVal = getNextToken().value;
 		accessVal.erase(--accessVal.end()); // erase semicolon
 		loc.addLimitExceptRule(access, accessVal);
@@ -107,7 +106,6 @@ void ParseConfig::parseBlock(AConfigBlock &block) {
 		int i = 0;
 
 		key = getNextToken().value;
-
 		if (key == "}")
 			return;
 		if (key == "location") {
@@ -119,7 +117,6 @@ void ParseConfig::parseBlock(AConfigBlock &block) {
 			if (serv_cfg->checkIfDuplicate(loc_path) == true) {
 				throw std::runtime_error("config error. duplicate location.");
 			}
-			
 			parseLocationBlock(*serv_cfg);
 		}
 		else if (key == "limit_except")

@@ -10,8 +10,13 @@ void				HttpRequest::setPath(const std::string &path) {
 const std::string	&HttpRequest::getMethod() const { return this->_method;}
 const std::string	&HttpRequest::getVersion() const { return this->_http_ver;}
 const std::string	&HttpRequest::getQuery() const { return this->_query_str;}
-const std::string	&HttpRequest::getHeader(const std::string &key) const {
-	return _headers.at(key);
+std::string			HttpRequest::getHeader(const std::string &key) const {
+	std::map<std::string,std::string>::const_iterator it = _headers.find(key);
+	
+	if (it != _headers.end())
+		return it->second;
+
+	return "";
 }
 const std::string	&HttpRequest::getBody() const { return this->_body;}
 

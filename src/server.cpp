@@ -194,6 +194,7 @@ void	Server::checkTimeouts() { //here
 void	Server::run_event_loop(epoll_event *ev) {
 	int                 			conn_sock, nfds;
 	struct epoll_event				events[MAX_EVENTS];
+	// std::map<int, Client>			clients;
 
 	for (;;) {
 		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, 1000);
@@ -203,7 +204,8 @@ void	Server::run_event_loop(epoll_event *ev) {
 			exit(EXIT_FAILURE);
 		}
 		for (int i = 0; i < nfds; ++i) {
-			if (events[i].data.fd == this->_listen_sock) {
+			int curr_fd = events[i].data.fd;
+			if (curr_fd == this->_listen_sock) {
 				struct	sockaddr_storage	client_addr;
 				socklen_t	clientaddr_len = sizeof(client_addr);
 
@@ -238,15 +240,21 @@ void	Server::run_event_loop(epoll_event *ev) {
 					std::cout << "New connection on fd " << conn_sock << std::endl;
 				}
 			}
-			else if (_cgi_client[events[i].data.fd]) {
+			else if (_cgi_client.find(curr_fd) != _cgi_client.end()) {
 				if (events[i].events & EPOLLIN)
-					handle_cgi_read(events[i].data.fd);
+					handle_cgi_read(curr_fd);
 				if (events[i].events & EPOLLOUT)
-					handle_cgi_write(events[i].data.fd);
+					handle_cgi_write(curr_fd);
 				// clear?
 			}
+			else if (_clients.find(curr_fd) != _clients.end()){
+				handle_client_event(curr_fd); // add return value in case the client needs to be disconnected TODO
+			}
 			else {
-				handle_client_event(events[i].data.fd); // add return value in case the client needs to be disconnected TODO
+				logTime(ERRLOG);
+				std::cerr << "Received event on unknown fd.";
+				epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, curr_fd, NULL);
+				close(curr_fd);
 			}
 		}
 		checkTimeouts();
@@ -285,7 +293,7 @@ Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
 	return true;
 }
 
-Server::Server() : _listen_sock(-1), _epoll_fd(-1) {}
+Server::Server() : _listen_sock(-1), _epoll_fd(-1), _clients() {}
 
 Server::~Server() {
 	if (this->_listen_sock != -1)

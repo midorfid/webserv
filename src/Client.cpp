@@ -63,8 +63,12 @@ Client::processNewData(Server &server) {
 				ParseResult status = _parser.parseReqLineHeaders(_request_buffer, _req);
 				if (status != Okay)
 					return status;
-				if (std::atoi(_req.getHeader("content-length").c_str()) > server.getConfig().getMaxBodySize())
-					return BodyTooLarge;
+				std::string len_str = _req.getHeader("content-length");
+				if (!len_str.empty()) {
+					size_t len = std::strtoul(len_str.c_str(), NULL, 10); 
+					if (len > static_cast<size_t>(server.getConfig().getMaxBodySize()))
+						return BodyTooLarge;
+				}
 				if (_req.getHeader("connection") == "close")
 					_last_activity = 0;
 
@@ -82,8 +86,6 @@ Client::processNewData(Server &server) {
 		}
 	}
 	else if (bytes_read == 0) {
-		logTime(REGLOG);
-		std::cout << "bytes_read == 0" << std::endl;
 		return NothingToRead;
 	}
 	else {
