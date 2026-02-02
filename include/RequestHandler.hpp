@@ -36,4 +36,10 @@ class RequestHandler {
 		const std::string		getStatusText(int code) const;
 		const std::string		generic_error_response() const;
 		const std::string		createSuccResponseHeaders(long int contentLen) const;
+		
+		int						checkFileCreation(const std::string &url_path);
+		const std::string		&checkFileExtension(const HttpRequest &req);
+		void					handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd);
+		int						putBinary(const HttpRequest &req);
+		void					redirect(int client_fd, const std::string &new_path) const;
 };

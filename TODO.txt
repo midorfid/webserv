@@ -4,6 +4,8 @@ change the way limit_except is parsed and stored, use int bitmask to optimize th
 
 //TODO WIP split pasrsing of headers and body into 2 steps
 
+add scrip to explicitly create files with POST
+
 implement 3 defense layers:
 1) long url
 2) body size > max

@@ -172,14 +172,77 @@ void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, cons
 	sendString(client_fd, html_body);
 }
 
-// void handlePost(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
-// 	//1) try to post
+int RequestHandler::checkFileCreation(const std::string &url_path) {
+	struct stat info;
 	
-// 	//2) send response
-// }
+	size_t par_dir_pos = url_path.find_last_of('/');
+
+	std::string parent_dir = (par_dir_pos == std::string::npos) ? "./" : url_path.substr(par_dir_pos);
+
+	if (stat(parent_dir.c_str(), &info) != 0)
+		return 404;
+	if (!S_ISDIR(info.st_mode))
+		return 409; // is not a dir
+	if (!(info.st_mode & S_IWUSR))
+		return 403; // no write permision
+
+	if (stat(url_path.c_str(), &info) == 0) {
+		if (!S_ISDIR(info.st_mode))
+			return 409;
+		
+		return 204; //(overwrite)
+	}
+
+	return 201; //new file
+}
+
+const std::string &RequestHandler::checkFileExtension(const HttpRequest &req) {
+	size_t extension_pos = req.getPath().rfind('.');
+
+	if (extension_pos != std::string::npos)
+		return req.getPath();
+
+	std::string con_type_exten = req.getHeader("content-type");
+
+	if (con_type_exten != "")
+		return req.getPath() + con_type_exten;
+
+	return req.getPath() + ".bin";
+}
+
+int RequestHandler::putBinary(const HttpRequest &req) {
+	const std::string &url_path = checkFileExtension(req);
+	int status = checkFileCreation(url_path);
+
+	if (status != 204 && status != 201)
+		return; //error
+	std::ofstream outfile(url_path, std::ios::binary | std::ios::trunc);
+	
+	if (!outfile.is_open())
+		return; // errro 500
+	
+	outfile.write(req.getBody().c_str(), req.getBody().size());
+	outfile.close();
+	return status;
+}
+
+void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
+	int status;
+	
+	std::string contentType = req.getHeader("content-type");
+	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
+		status = putBinary(req);
+		if (status != 204 && status != 201)
+			return; //error
+	}
+	// TODO create response struct as well as response builder to keep DRY
+	//2) send response
+}
+
+
 
 void RequestHandler::redirect(int client_fd, const std::string &new_path) const{
-	std::stringstream		response;
+	std::stringstream		response; // TODO doesn;t it need extra header or body? if not, add 301 to the map and use generic func
 
 	response << "HTTP/1.1 301 Moved Permanently\r\n";
 	response << "Date: " << getHttpDate() << "\r\n";
@@ -193,21 +256,19 @@ void RequestHandler::redirect(int client_fd, const std::string &new_path) const{
 }
 
 void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
-	if (req.getMethod() == "GET" || req.getMethod() == "POST") { // post?
-		switch (action.type) {
-			case ACTION_SERVE_FILE:
-				return sendFile(action, client_fd);
-			case ACTION_GENERATE_ERROR:
-				return sendDefaultError(action.status_code, client_fd);
-			case ACTION_AUTOINDEX:
-				return sendDir(action.target_path, client_fd, req.getPath());
-			case ACTION_CGI:
-				return state.addFds(action.cgi_fds.first, action.cgi_fds.second); // return 200 status code?
-			case ACTION_REDIRECT:
-				return redirect(client_fd, action.target_path);
-			default:
-				return sendDefaultError(500, client_fd);
-		}
+	switch (action.type) {
+		case ACTION_SERVE_FILE:
+			return sendFile(action, client_fd);
+		case ACTION_GENERATE_ERROR:
+			return sendDefaultError(action.status_code, client_fd);
+		case ACTION_AUTOINDEX:
+			return sendDir(action.target_path, client_fd, req.getPath());
+		case ACTION_CGI:
+			return state.addFds(action.cgi_fds.first, action.cgi_fds.second); // return 200 status code?
+		case ACTION_REDIRECT:
+			return redirect(client_fd, action.target_path);
+		default:
+			return sendDefaultError(500, client_fd);
 	}
 }
 
