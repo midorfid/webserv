@@ -26,7 +26,7 @@
 // content-type get filetype and charset from the file?
 // connection close/redirect/?
 
-std::string		RequestHandler::getHttpDate() const{
+std::string		Response::getHttpDate(){
 	time_t now = time(NULL);
 
 	struct tm *gmt_time = gmtime(&now);
@@ -38,7 +38,7 @@ std::string		RequestHandler::getHttpDate() const{
 	return std::string(buffer);
 }
 
-const std::string	RequestHandler::getStatusText(int code) const{
+std::string	Response::getStatusText(int code){
 	switch (code) {
 	case 403: return "Forbidden";
 	case 404: return "Not Found";
@@ -49,22 +49,9 @@ const std::string	RequestHandler::getStatusText(int code) const{
 	case 408: return "Request Timeout";
 	case 413: return "Payload Too Large";
 	case 414: return "URl Too Long";
+	case 301: return "Moved Permanently";
 	default: return "Error";
 	}
-}
-
-const std::string RequestHandler::createSuccResponseHeaders(long int contentLen) const{
-	std::stringstream		response;
-
-	response << "HTTP/1.1 200 Success\r\n";
-	response << "Date: " << getHttpDate() << "\r\n";
-	response << "Server: " << "Webserv/ver 1.0\r\n";
-	response << "Content-Type: text/html\r\n";
-	response << "Content-Length: " << contentLen << "\r\n";
-	response << "Connection: keep-alive\r\n";
-	response << "\r\n";
-
-	return response.str();
 }
 
 void	RequestHandler::sendString(int client_fd, const std::string &response) const{
@@ -99,49 +86,41 @@ void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path)
 	}
 }
 
-void			RequestHandler::sendDefaultError(int status_code, int client_fd) const{
-	const std::string &errorText = getStatusText(status_code);
-	const std::string &codeAndText = std::to_string(status_code) + " " + errorText;
-	const std::string body = "<!DOCTYPE html><html><body><h1>" + codeAndText + "</h1></body></html>";
-
-	std::stringstream		response;
-
-	response << "HTTP/1.1 " + codeAndText + "\r\n";
-	response << "Date: " << getHttpDate() << "\r\n";
-	response << "Server: " << "Webserv/ver 1.0\r\n";
-	response << "Content-Type: text/html\r\n";
-	response << "Content-Length: " << body.length() << "\r\n";
-	response << "Connection: close\r\n";
-	response << "\r\n";
-	response << body;
-
-	sendString(client_fd, response.str());
-}
-
 void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) const{
 	long int file_size = action.st.st_size;
 	
-	const std::string response = createSuccResponseHeaders(file_size);
+	const std::string response = Response::createSuccResponseHeaders(file_size);
 	sendString(client_fd, response);
 	streamFileBody(client_fd, action.target_path);
 }
 
-std::string		RequestHandler::createDirListHtml(const std::string &physical_path, const std::string &logic_path) const{
-	std::string html_body = "<!DOCTYPE html>\r\n"
-						"<html lang=en>\r\n"
-						"<head>\r\n"
-						"	<meta charset=\"UTF-8\">\r\n"
-						"	<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n"
-						"	<title>Index of " + logic_path + "</title>\r\n"
-						"</head>\r\n"
-						"<body>\r\n"
-						"	<h1>Index of " + logic_path + "</h1>\r\n"
-						"	<hr>\r\n"
-						"	<ul>\r\n";
+ResponseState	handleOpenDirFail(ResponseState	&res) {
+	if (errno == ENOENT || errno == ENOTDIR)
+		res.status_code = 404;
+	else if (errno == EACCES)
+		res.status_code = 403;
+	else
+		res.status_code = 500;
 	
+}
+
+ResponseState	RequestHandler::createDirListHtml(const std::string &physical_path, const std::string &logic_path) const{
+	ResponseState	res;
+	res.body = "<!DOCTYPE html>\r\n"
+				"<html lang=en>\r\n"
+				"<head>\r\n"
+				"	<meta charset=\"UTF-8\">\r\n"
+				"	<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n"
+				"	<title>Index of " + logic_path + "</title>\r\n"
+				"</head>\r\n"
+				"<body>\r\n"
+				"	<h1>Index of " + logic_path + "</h1>\r\n"
+				"	<hr>\r\n"
+				"	<ul>\r\n";
+
 	DIR *directory = opendir(physical_path.c_str());
 	if (!directory)
-		throw std::runtime_error("could not open dir");
+		return handleOpenDirFail(res);
 
 	for (dirent *entry = readdir(directory); entry != NULL; entry = readdir(directory)) {
 		std::string name = entry->d_name;
@@ -156,23 +135,42 @@ std::string		RequestHandler::createDirListHtml(const std::string &physical_path,
 		{
 			name += "/";
 		}
-		html_body += "		<li><a href=\"" + href_link + "\">" + name + "</a></li>\r\n";
+		res.body += "<li><a href=\"" + href_link + "\">" + name + "</a></li>\r\n";
 	}
-	html_body += "	</ul>\r\n"
+	res.body += "	</ul>\r\n"
 				 "</body>\r\n"
 				 "</html>\r\n";
 	closedir(directory);
-	return html_body;
+	return res;
+}
+
+std::string		RequestHandler::generatePage(int error_code, const std::string &text, const std::string &details = "") const{
+	std::stringstream ss;
+
+	ss << "<!DOCTYPE html>\r\n";
+	ss << "<html lang=en>\r\n";
+	ss << "<head>\r\n";
+	ss << "<meta charset=\"UTF-8\">\r\n";
+	ss << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n";
+	ss << "<title>" << error_code << " " << text << "</title>\r\n";
+	ss << "</head>\r\n";
+	ss << "<body>\r\n";
+	ss << "<center><h1>" << error_code << " " << text << "</h1></center>\r\n";
+	if (!details.empty())
+		ss << "<center>" << details << "</center>\r\n";
+	ss << "<hr><center>webserv/1.0</center>\r\n";
+	ss << "</body></html>";
+
+	return ss.str();
 }
 
 void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, const std::string &logic_path) const{
 	const std::string html_body = createDirListHtml(phys_path, logic_path);
-
-	sendString(client_fd, createSuccResponseHeaders(html_body.length()));
-	sendString(client_fd, html_body);
+	const std::string resp = Response::buildHeaders()
+	
 }
 
-int RequestHandler::checkFileCreation(const std::string &url_path) {
+ResponseState &RequestHandler::checkFileCreation(const std::string &url_path) {
 	struct stat info;
 	
 	size_t par_dir_pos = url_path.find_last_of('/');
@@ -210,9 +208,10 @@ const std::string &RequestHandler::checkFileExtension(const HttpRequest &req) {
 	return req.getPath() + ".bin";
 }
 
-int RequestHandler::putBinary(const HttpRequest &req) {
+ResponseState &RequestHandler::putBinary(const HttpRequest &req) {
 	const std::string &url_path = checkFileExtension(req);
-	int status = checkFileCreation(url_path);
+	ResponseState resp;
+	resp.status_code = checkFileCreation(url_path);
 
 	if (status != 204 && status != 201)
 		return; //error
@@ -227,7 +226,7 @@ int RequestHandler::putBinary(const HttpRequest &req) {
 }
 
 void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
-	int status;
+	ResponseState status;
 	
 	std::string contentType = req.getHeader("content-type");
 	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
@@ -237,22 +236,6 @@ void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, i
 	}
 	// TODO create response struct as well as response builder to keep DRY
 	//2) send response
-}
-
-
-
-void RequestHandler::redirect(int client_fd, const std::string &new_path) const{
-	std::stringstream		response; // TODO doesn;t it need extra header or body? if not, add 301 to the map and use generic func
-
-	response << "HTTP/1.1 301 Moved Permanently\r\n";
-	response << "Date: " << getHttpDate() << "\r\n";
-	response << "Server: " << "Webserv/ver 1.0\r\n";
-	response << "Content-Type: " << new_path << "\r\n";
-	response << "Content-Length: 0" << "\r\n";
-	response << "Connection: keep-alive\r\n";
-	response << "\r\n";
-
-	sendString(client_fd, response.str());
 }
 
 void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
