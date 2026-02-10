@@ -19,6 +19,23 @@
 // }	
 // 
 
+
+bool
+Location::hasRedirect() const { return _hasRedirect;}
+
+void
+Location::setRedirect(int status_code, const std::string &url) {
+	_hasRedirect = true;
+	_redirectCode = status_code;
+	_redirectURL = url;
+}
+
+std::pair<int, std::string>
+Location::getRedirect() const {
+	return std::make_pair(_redirectCode, _redirectURL);
+}
+
+
 void Location::addLimitExceptMethod(const HttpMethod &methBit) {
 	_rules.methodMask |= methBit;
 }

@@ -170,7 +170,7 @@ void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, cons
 	
 }
 
-ResponseState &RequestHandler::checkFileCreation(const std::string &url_path) {
+int RequestHandler::checkFileCreation(const std::string &url_path) {
 	struct stat info;
 	
 	size_t par_dir_pos = url_path.find_last_of('/');
@@ -185,7 +185,7 @@ ResponseState &RequestHandler::checkFileCreation(const std::string &url_path) {
 		return 403; // no write permision
 
 	if (stat(url_path.c_str(), &info) == 0) {
-		if (!S_ISDIR(info.st_mode))
+		if (S_ISDIR(info.st_mode))
 			return 409;
 		
 		return 204; //(overwrite)
@@ -210,8 +210,9 @@ const std::string &RequestHandler::checkFileExtension(const HttpRequest &req) {
 
 ResponseState &RequestHandler::putBinary(const HttpRequest &req) {
 	const std::string &url_path = checkFileExtension(req);
-	ResponseState resp;
-	resp.status_code = checkFileCreation(url_path);
+	int status_code = checkFileCreation(url_path);
+	
+	ResponseState resp(status_code);
 
 	if (status != 204 && status != 201)
 		return; //error

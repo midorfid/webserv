@@ -8,14 +8,18 @@
 class Location : public AConfigBlock {
 	public:
 
-		Location() : _path(""), _rules() {}
+		Location() : _hasRedirect(false), _redirectCode(0), _path(""), _rules() {}
 		~Location() {}
-		Location(const Location &other) : AConfigBlock(other), _path(other._path), _rules(other._rules) {}
+		Location(const Location &other) : AConfigBlock(other), _path(other._path), _rules(other._rules),
+				_hasRedirect(other._hasRedirect), _redirectCode(other._redirectCode), _redirectURL(other._redirectURL) {}
 		Location &operator=(const Location &other) {
 			if (this != &other) {
 				AConfigBlock::operator=(other);
-				this->_path = other._path;
+				_path = other._path;
 				_rules = other._rules;
+				_hasRedirect = other._hasRedirect;
+				_redirectCode = other._redirectCode;
+				_redirectURL = other._redirectURL;
 			}
 			return *this;
 		}
@@ -29,12 +33,19 @@ class Location : public AConfigBlock {
 
 		bool						checkLimExceptAccess(const std::string &meth, const std::string &ip) const;
 
+		bool							hasRedirect() const;
+		void							setRedirect(int, const std::string &);
+		std::pair<int, std::string>		getRedirect() const;
 		// void						_setDirective(const std::string &key, const std::string &value);
         // void						_setMultiDirective(const std::string &key, const std::vector<std::string> &value);
 		// void						_setErrorPage(const std::string &error_code, const std::string &file);
 		// void						_addLimitExceptRules(const std::string &key, const std::string &value);
 
 	private:
+
+		bool								_hasRedirect;
+		int									_redirectCode;
+		std::string							_redirectURL;
 
 		std::string							_path;
 		limitExceptRules					_rules;

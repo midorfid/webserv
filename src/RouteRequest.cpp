@@ -145,6 +145,7 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	if (location == NULL) {
 		return resolveErrorAction(404, serv_cfg);
 	}
+	if (location && location.isRedirect())
 	if (!location->checkLimExceptAccess(req.getMethod(), client_ip)) {
 		return resolveErrorAction(403, serv_cfg);
 	}

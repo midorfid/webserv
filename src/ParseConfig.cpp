@@ -82,6 +82,9 @@ void	ParseConfig::parseLocationBlock(Config &config) {
 		else if (key == "limit_except") {
 			parseLimitExceptB(loc);
 		}
+		else if (key == "return") { // only handles redirection
+			loc.setRedirect(std::strtoul(getNextToken().value.c_str(), NULL, 10), getNextToken().value);
+		}
 		else {
 			std::vector<std::string>	value;
 			while (1) {
