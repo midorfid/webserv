@@ -8,7 +8,7 @@
 class Location : public AConfigBlock {
 	public:
 
-		Location() : _hasRedirect(false), _redirectCode(0), _path(""), _rules() {}
+		Location() : _path(""), _rules(), _hasRedirect(false), _redirectCode(0) {}
 		~Location() {}
 		Location(const Location &other) : AConfigBlock(other), _path(other._path), _rules(other._rules),
 				_hasRedirect(other._hasRedirect), _redirectCode(other._redirectCode), _redirectURL(other._redirectURL) {}
@@ -43,11 +43,10 @@ class Location : public AConfigBlock {
 
 	private:
 
-		bool								_hasRedirect;
-		int									_redirectCode;
-		std::string							_redirectURL;
-
 		std::string							_path;
 		limitExceptRules					_rules;
 
+		bool								_hasRedirect;
+		int									_redirectCode;
+		std::string							_redirectURL;
 };

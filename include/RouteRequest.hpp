@@ -32,9 +32,9 @@ class RouteRequest {
 	private:
 
 		std::string			catPathes(const std::string &reqPath, std::string &root_path, struct stat *st);
-		ResolvedAction		resolveRedirect(const std::string &dir_path, struct stat *st);
+		ResolvedAction		resolveRedirect(const std::string &dir_path, struct stat *st, int status_code = 301);
 		bool				NoSlash(const std::string &str);
-		ResolvedAction		PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg);
+		ResolvedAction		PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, struct stat *st);
 		bool				checkLimitExcept(const std::string &method, const std::string &client_ip);
         const Location      *findBestLocationMatch(const Config &serv_cfg, const std::string &url);
         std::string			handlePath(const Config &serv_cfg, HttpRequest &req);

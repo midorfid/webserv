@@ -26,33 +26,6 @@
 // content-type get filetype and charset from the file?
 // connection close/redirect/?
 
-std::string		Response::getHttpDate(){
-	time_t now = time(NULL);
-
-	struct tm *gmt_time = gmtime(&now);
-
-	char buffer[128];
-	// Thu, 09 Oct 2025 09:01:45 GMT
-	strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT", gmt_time);
-
-	return std::string(buffer);
-}
-
-std::string	Response::getStatusText(int code){
-	switch (code) {
-	case 403: return "Forbidden";
-	case 404: return "Not Found";
-	case 500: return "Internal Server Error";
-	case 200: return "OK";
-	case 400: return "Bad Request";
-	case 405: return "Method Not Allowed";
-	case 408: return "Request Timeout";
-	case 413: return "Payload Too Large";
-	case 414: return "URl Too Long";
-	case 301: return "Moved Permanently";
-	default: return "Error";
-	}
-}
 
 void	RequestHandler::sendString(int client_fd, const std::string &response) const{
 	ssize_t total_sent;
@@ -89,7 +62,13 @@ void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path)
 void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) const{
 	long int file_size = action.st.st_size;
 	
-	const std::string response = Response::createSuccResponseHeaders(file_size);
+	ResponseState res(action.status_code);
+	
+	res.addHeader("Content-Length", std::to_string(file_size));
+	
+	Response::finalizeResponse(res, action.target_path);
+
+	const std::string response = Response::build(res);
 	sendString(client_fd, response);
 	streamFileBody(client_fd, action.target_path);
 }
@@ -165,12 +144,15 @@ std::string		RequestHandler::generatePage(int error_code, const std::string &tex
 }
 
 void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, const std::string &logic_path) const{
-	const std::string html_body = createDirListHtml(phys_path, logic_path);
-	const std::string resp = Response::buildHeaders()
+	ResponseState state = createDirListHtml(phys_path, logic_path);
 	
+	Response::finalizeResponse(state, logic_path);
+	
+	const std::string resp = Response::build(state);
+	sendString(client_fd, resp);
 }
 
-int RequestHandler::checkFileCreation(const std::string &url_path) {
+int RequestHandler::checkFileCreation(const std::string &url_path, const HttpRequest &req) {
 	struct stat info;
 	
 	size_t par_dir_pos = url_path.find_last_of('/');
@@ -190,7 +172,11 @@ int RequestHandler::checkFileCreation(const std::string &url_path) {
 		
 		return 204; //(overwrite)
 	}
-
+	std::ofstream outfile(url_path, std::ios::binary | std::ios::trunc);
+	outfile.write(req.getBody().c_str(), req.getBody().size());
+	outfile.close();
+	if (!outfile.is_open())
+		return 500;
 	return 201; //new file
 }
 
@@ -208,22 +194,23 @@ const std::string &RequestHandler::checkFileExtension(const HttpRequest &req) {
 	return req.getPath() + ".bin";
 }
 
-ResponseState &RequestHandler::putBinary(const HttpRequest &req) {
+void 
+RequestHandler::putBinary(const HttpRequest &req, int client_fd) {
 	const std::string &url_path = checkFileExtension(req);
-	int status_code = checkFileCreation(url_path);
+	int status_code = checkFileCreation(url_path, req);
 	
 	ResponseState resp(status_code);
 
-	if (status != 204 && status != 201)
-		return; //error
-	std::ofstream outfile(url_path, std::ios::binary | std::ios::trunc);
-	
-	if (!outfile.is_open())
-		return; // errro 500
-	
-	outfile.write(req.getBody().c_str(), req.getBody().size());
-	outfile.close();
-	return status;
+	if (status_code >= 400) {
+		resp.body = generatePage(status_code, Response::getStatusText(status_code));
+	}
+	else {
+		resp.body = "";
+	}
+
+	Response::finalizeResponse(resp, req.getPath());
+
+	sendString(client_fd, Response::build(resp));
 }
 
 void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
@@ -231,9 +218,7 @@ void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, i
 	
 	std::string contentType = req.getHeader("content-type");
 	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
-		status = putBinary(req);
-		if (status != 204 && status != 201)
-			return; //error
+		putBinary(req, client_fd);
 	}
 	// TODO create response struct as well as response builder to keep DRY
 	//2) send response

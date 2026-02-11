@@ -84,12 +84,12 @@ bool RouteRequest::NoSlash(const std::string &str) {
 	return (str.back() == '/') ? false : true;
 }
 
-ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, struct stat *st) {
+ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, struct stat *st, int status_code = 301) {
 	ResolvedAction	action;
 
 	action.st = *st;
-	action.status_code = 301;
-	action.target_path = dir_path + '/';
+	action.status_code = status_code;
+	action.target_path = dir_path;
 	action.type = ACTION_REDIRECT;
 	return action;
 }
@@ -100,7 +100,7 @@ ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const
 	std::vector<std::string>	indexes;
 
 	if (NoSlash(dir_path))
-		return resolveRedirect(dir_path, st);
+		return resolveRedirect(dir_path + '/', st);
 	if (location->getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
 		return action;
 	if (cfg.getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
@@ -138,6 +138,7 @@ ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config 
 }
 
 ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req, const std::string &client_ip) {
+	struct stat				st;
 	std::string				phys_path;
 	const std::string		&req_path = req.getPath();
 
@@ -145,12 +146,15 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	if (location == NULL) {
 		return resolveErrorAction(404, serv_cfg);
 	}
-	if (location && location.isRedirect())
+	if (location && location->hasRedirect()) {
+		std::pair<int, std::string> redirInfo = location->getRedirect();
+		return resolveRedirect(redirInfo.second, &st, redirInfo.first);
+	}
 	if (!location->checkLimExceptAccess(req.getMethod(), client_ip)) {
 		return resolveErrorAction(403, serv_cfg);
 	}
 
-	return PathFinder(req, *location, serv_cfg);
+	return PathFinder(req, *location, serv_cfg, &st);
 }
 
 std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st) {
@@ -164,18 +168,17 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 	return full_path;
 }
 
-ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg) {
+ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, struct stat *st) {
 	std::string root_path;
-	struct stat st;
 
 	loc.getDirective("root", root_path);
-	const std::string &full_path = catPathes(req.getPath(), root_path, &st);
+	const std::string &full_path = catPathes(req.getPath(), root_path, st);
 	
 	if (loc.isCgiRequest(full_path)) {
-		return resolveCgiScript(serv_cfg, req, full_path, &st);
+		return resolveCgiScript(serv_cfg, req, full_path, st);
 	}
 
-	return checkReqPath(full_path, serv_cfg, &loc, &st);
+	return checkReqPath(full_path, serv_cfg, &loc, st);
 }
 
 ResolvedAction
