@@ -73,19 +73,26 @@ void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) con
 	streamFileBody(client_fd, action.target_path);
 }
 
-ResponseState	handleOpenDirFail(ResponseState	&res) {
+int	handleOpenDirFail() {
 	if (errno == ENOENT || errno == ENOTDIR)
-		res.status_code = 404;
+		return 404;
 	else if (errno == EACCES)
-		res.status_code = 403;
+		return 403;
 	else
-		res.status_code = 500;
-	
+		return 500;
 }
 
 ResponseState	RequestHandler::createDirListHtml(const std::string &physical_path, const std::string &logic_path) const{
-	ResponseState	res;
-	res.body = "<!DOCTYPE html>\r\n"
+	ResponseState	res(200);
+
+	DIR *directory = opendir(physical_path.c_str());
+	if (!directory) {
+		int status = handleOpenDirFail();
+		res.status_code = status;
+		res.body = generatePage(status, Response::getStatusText(status));
+	}
+	else {
+		res.body = "<!DOCTYPE html>\r\n"
 				"<html lang=en>\r\n"
 				"<head>\r\n"
 				"	<meta charset=\"UTF-8\">\r\n"
@@ -96,34 +103,31 @@ ResponseState	RequestHandler::createDirListHtml(const std::string &physical_path
 				"	<h1>Index of " + logic_path + "</h1>\r\n"
 				"	<hr>\r\n"
 				"	<ul>\r\n";
-
-	DIR *directory = opendir(physical_path.c_str());
-	if (!directory)
-		return handleOpenDirFail(res);
-
-	for (dirent *entry = readdir(directory); entry != NULL; entry = readdir(directory)) {
-		std::string name = entry->d_name;
-		if (name == ".." || name == ".")
-			continue;
-		std::string href_link = logic_path;
-		if (href_link[href_link.length() - 1] != '/')
-			href_link += "/";
-		struct stat st;
-		if (stat((physical_path + "/" + href_link).c_str(), &st) == 0 &&
-				S_ISDIR(st.st_mode))
-		{
-			name += "/";
+		for (dirent *entry = readdir(directory); entry != NULL; entry = readdir(directory)) {
+			std::string name = entry->d_name;
+			if (name == ".." || name == ".")
+				continue;
+			std::string href_link = logic_path;
+			if (href_link[href_link.length() - 1] != '/')
+				href_link += "/";
+			struct stat st;
+			if (stat((physical_path + "/" + href_link).c_str(), &st) == 0 &&
+					S_ISDIR(st.st_mode))
+			{
+				name += "/";
+			}
+			res.body += "<li><a href=\"" + href_link + "\">" + name + "</a></li>\r\n";
 		}
-		res.body += "<li><a href=\"" + href_link + "\">" + name + "</a></li>\r\n";
+		res.body += "	</ul>\r\n"
+					 "</body>\r\n"
+					 "</html>\r\n";
+		closedir(directory);
 	}
-	res.body += "	</ul>\r\n"
-				 "</body>\r\n"
-				 "</html>\r\n";
-	closedir(directory);
+
 	return res;
 }
 
-std::string		RequestHandler::generatePage(int error_code, const std::string &text, const std::string &details = "") const{
+std::string		RequestHandler::generatePage(int error_code, const std::string &text, const std::string &details) const{
 	std::stringstream ss;
 
 	ss << "<!DOCTYPE html>\r\n";
@@ -180,7 +184,7 @@ int RequestHandler::checkFileCreation(const std::string &url_path, const HttpReq
 	return 201; //new file
 }
 
-const std::string &RequestHandler::checkFileExtension(const HttpRequest &req) {
+std::string RequestHandler::checkFileExtension(const HttpRequest &req) {
 	size_t extension_pos = req.getPath().rfind('.');
 
 	if (extension_pos != std::string::npos)
@@ -222,6 +226,7 @@ void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, i
 	}
 	// TODO create response struct as well as response builder to keep DRY
 	//2) send response
+	(void)serv_cfg;
 }
 
 void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{

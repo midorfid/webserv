@@ -84,7 +84,7 @@ bool RouteRequest::NoSlash(const std::string &str) {
 	return (str.back() == '/') ? false : true;
 }
 
-ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, struct stat *st, int status_code = 301) {
+ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, struct stat *st, int status_code) {
 	ResolvedAction	action;
 
 	action.st = *st;

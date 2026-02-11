@@ -34,7 +34,7 @@ class RequestHandler {
 		void			sendDir(const std::string &phys_path, int client_fd, const std::string &logic_path) const;
 		
 		int						checkFileCreation(const std::string &url_path, const HttpRequest &req);
-		const std::string		&checkFileExtension(const HttpRequest &req);
+		std::string				checkFileExtension(const HttpRequest &req);
 		void					handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd);
 		void					putBinary(const HttpRequest &req, int client_fd);
 		std::string				generatePage(int error_code, const std::string &text, const std::string &details = "") const;
