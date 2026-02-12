@@ -229,12 +229,24 @@ void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, i
 	(void)serv_cfg;
 }
 
+void
+RequestHandler::sendDefaultError(const ResolvedAction &action, int client_fd) const{
+	ResponseState resp(action.status_code);
+
+	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
+	Response::finalizeResponse(resp, action.target_path);
+	Response::build(resp);
+
+
+	send
+}
+
 void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
 	switch (action.type) {
 		case ACTION_SERVE_FILE:
 			return sendFile(action, client_fd);
 		case ACTION_GENERATE_ERROR:
-			return sendDefaultError(action.status_code, client_fd);
+			return sendDefaultError(action, client_fd);
 		case ACTION_AUTOINDEX:
 			return sendDir(action.target_path, client_fd, req.getPath());
 		case ACTION_CGI:
@@ -242,7 +254,7 @@ void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &stat
 		case ACTION_REDIRECT:
 			return redirect(client_fd, action.target_path);
 		default:
-			return sendDefaultError(500, client_fd);
+			return sendDefaultError(action, client_fd);
 	}
 }
 
