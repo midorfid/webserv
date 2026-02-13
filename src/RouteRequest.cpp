@@ -171,8 +171,9 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, struct stat *st) {
 	std::string root_path;
 
-	loc.getDirective("root", root_path);
-	const std::string &full_path = catPathes(req.getPath(), root_path, st);
+	// loc.getDirective("root", root_path);
+	// const std::string &full_path = catPathes(req.getPath(), root_path, st);
+	const std::string &full_path = req.getPath();
 	
 	if (loc.isCgiRequest(full_path)) {
 		return resolveCgiScript(serv_cfg, req, full_path, st);
