@@ -236,7 +236,6 @@ RequestHandler::sendDefaultError(int status_code, int client_fd) const{
 	resp.body = generatePage(status_code, Response::getStatusText(status_code));
 	Response::finalizeResponse(resp, "");
 	std::string toSend = Response::build(resp);
-	std::cout << toSend << std::endl;
 
 	sendString(client_fd, toSend);
 }
@@ -254,7 +253,6 @@ RequestHandler::redirect(int client_fd, const ResolvedAction &action) const{
 }
 
 void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
-	std::cout << "qq" << std::endl;
 	switch (action.type) {
 		case ACTION_SERVE_FILE:
 			return sendFile(action, client_fd);

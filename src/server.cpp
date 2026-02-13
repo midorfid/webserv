@@ -174,7 +174,7 @@ Server::diffTime(const time_t &client_tm) {
 	return static_cast<double>(now - client_tm);
 }
 
-void	Server::checkTimeouts() { //here
+void	Server::checkTimeouts() {
 	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
 		double quiet_time = diffTime(it->second.getLastActivity());
 
@@ -188,6 +188,8 @@ void	Server::checkTimeouts() { //here
 			if (quiet_time > static_cast<double>(_config.getKeepAliveTimer()))
 				disconnect_client(it->first);
 		}
+		if (_clients.empty())
+			break;
 	}
 }
 
