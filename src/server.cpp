@@ -367,7 +367,7 @@ Server::handleDefault(Client &client, int client_fd) {
 
 void
 Server::terminateConnWithError(int client_fd, int error_code) {
-	_handler.sendDefaultError(error_code, client_fd);
+ 	_handler.sendDefaultError(error_code, client_fd);
 	disconnect_client(client_fd);
 }
 

@@ -230,31 +230,44 @@ void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, i
 }
 
 void
-RequestHandler::sendDefaultError(const ResolvedAction &action, int client_fd) const{
+RequestHandler::sendDefaultError(int status_code, int client_fd) const{
+	ResponseState resp(status_code);
+	
+	resp.body = generatePage(status_code, Response::getStatusText(status_code));
+	Response::finalizeResponse(resp, "");
+	std::string toSend = Response::build(resp);
+	std::cout << toSend << std::endl;
+
+	sendString(client_fd, toSend);
+}
+
+void
+RequestHandler::redirect(int client_fd, const ResolvedAction &action) const{
 	ResponseState resp(action.status_code);
 
 	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
+
 	Response::finalizeResponse(resp, action.target_path);
-	Response::build(resp);
+	std::string toSend = Response::build(resp);
 
-
-	send
+	sendString(client_fd, toSend);
 }
 
 void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
+	std::cout << "qq" << std::endl;
 	switch (action.type) {
 		case ACTION_SERVE_FILE:
 			return sendFile(action, client_fd);
 		case ACTION_GENERATE_ERROR:
-			return sendDefaultError(action, client_fd);
+			return sendDefaultError(action.status_code, client_fd);
 		case ACTION_AUTOINDEX:
 			return sendDir(action.target_path, client_fd, req.getPath());
 		case ACTION_CGI:
 			return state.addFds(action.cgi_fds.first, action.cgi_fds.second); // return 200 status code?
 		case ACTION_REDIRECT:
-			return redirect(client_fd, action.target_path);
+			return redirect(client_fd, action);
 		default:
-			return sendDefaultError(action, client_fd);
+			return sendDefaultError(action.status_code, client_fd);
 	}
 }
 

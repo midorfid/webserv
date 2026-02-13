@@ -34,7 +34,7 @@ Response::build(const ResponseState &resp) {
 	std::stringstream		response;
 	
 	std::string status_text = Response::getStatusText(resp.status_code);
-	response << "HTTP/1.1" << resp.status_code << status_text << "\r\n";
+	response << "HTTP/1.1 " << resp.status_code << " " << status_text << "\r\n";
 	for (std::vector<std::pair<std::string, std::string> >::const_iterator it = resp.headers.begin(); it != resp.headers.end(); ++it) {
 		response << it->first << ": " << it->second << "\r\n";
 	}

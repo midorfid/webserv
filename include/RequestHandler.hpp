@@ -18,11 +18,11 @@ class RequestHandler {
 		RequestHandler &operator=(const RequestHandler &other);
 		
 		void		handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const;
-		void		sendDefaultError(const ResolvedAction &action, int client_fd) const;
+		void		sendDefaultError(int status_code, int client_fd) const;
 		
 	private:
 
-		void				redirect(int client_fd, const std::string &new_path) const;
+		void				redirect(int client_fd, const ResolvedAction &action) const;
 		void				sendString(int client_fd, const std::string &response) const;
 		void				streamFileBody(int client_fd, const std::string &file_path) const;
 								
