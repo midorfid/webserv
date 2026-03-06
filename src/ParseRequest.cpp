@@ -140,6 +140,8 @@ std::string	normalizePath(const std::string &req_path) {
 	std::stringstream			ss(req_path);
 	std::string					token;
 
+	if (req_path == "/")
+		return req_path;
 	while (std::getline(ss, token, '/')) {
 		if (token == "." || token == "") {
 			continue;

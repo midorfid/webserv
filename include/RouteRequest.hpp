@@ -43,7 +43,7 @@ class RouteRequest {
 		ResolvedAction		resolveDirAction(const std::string &path, const Config &cfg, struct stat *st,
 								const Location *location);
 		bool				findAccessibleIndex(ResolvedAction &action, const std::string &dir_path,
-								const std::vector<std::string> &indexes);
+								const std::vector<std::string> &indexes, const std::string &root);
         ResolvedAction      checkReqPath(const std::string &path, const Config &cfg, const Location *location, struct stat *st);
         ResolvedAction      resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, struct stat *st);
 };

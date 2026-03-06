@@ -9,9 +9,11 @@ const Location	*RouteRequest::findBestLocationMatch(const Config &serv_cfg, cons
 	const Location	*best_match = NULL;
 	size_t			longest_len = 0;
 	
+	std::cout << "req url:" << url << "A\n" << std::endl;
 	const std::vector<Location>	&locations = serv_cfg.getLocations();
 	for (size_t i = 0; i < locations.size(); ++i) {
 		const std::string &loc_path = locations[i].getPath();
+		std::cout << "loc_path:" << loc_path << std::endl; 
 		if (url.find(loc_path, 0) != url.npos) {
 			if (loc_path.length() > longest_len) {
 				longest_len = loc_path.length();
@@ -63,10 +65,9 @@ ResolvedAction RouteRequest::resolveFileAction(const std::string &path, struct s
 }
 
 bool	RouteRequest::findAccessibleIndex(ResolvedAction &action, const std::string &dir_path,
-											const std::vector<std::string> &indexes) {
+											const std::vector<std::string> &indexes, const std::string &root_path) {
 	for (size_t i = 0; i < indexes.size(); ++i) {
-		std::string full_path = dir_path + "/" + indexes[i];
-		
+		std::string full_path = root_path + dir_path + indexes[i];
 		struct stat st;
 
 		if (stat(full_path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
@@ -96,15 +97,21 @@ ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, struct
 
 ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const Config &cfg,
 												struct stat *st, const Location *location) {
+	std::string					root_path;
 	ResolvedAction				action;
 	std::vector<std::string>	indexes;
-
+	
 	if (NoSlash(dir_path))
 		return resolveRedirect(dir_path + '/', st);
-	if (location->getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
+	
+	if (location->getDirective("root", root_path) == false)
+		resolveErrorAction(500, cfg);
+
+	if (location->getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes, root_path))
 		return action;
-	if (cfg.getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
+	if (cfg.getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes, root_path))
 		return action;
+
 	std::string	autoindex;
 	if (location->isAutoindexOn()) {
 		action.st = *st;
@@ -118,6 +125,7 @@ ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const
 
 
 ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location, struct stat *st) {
+	std::cout << "path:" << path << std::endl;
 	if (stat(path.c_str(), st) != 0) {
 		switch(errno) {
 			case ENOENT:

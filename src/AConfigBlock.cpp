@@ -38,7 +38,14 @@ bool AConfigBlock::isAutoindexOn() const {
 }
 
 bool AConfigBlock::getIndexes(std::vector<std::string> &out_val) const {
-	return getMultiDirective("index", out_val);
+	if (getMultiDirective("index", out_val) == false) {
+		std::string single_index;
+		if (getIndex(single_index) == true) {
+			out_val.push_back(single_index);
+			return true;
+		}
+	}
+	return false;
 }
 
 bool AConfigBlock::getIndex(std::string &out_val) const {
