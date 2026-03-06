@@ -246,9 +246,9 @@ RequestHandler::redirect(int client_fd, const ResolvedAction &action) const{
 
 	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
 
-	Response::finalizeResponse(resp, action.target_path);
+	Response::finalizeResponse(resp, action.target_path, resp.body.length());
 	std::string toSend = Response::build(resp);
-
+	std::cout << toSend;
 	sendString(client_fd, toSend);
 }
 

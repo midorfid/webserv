@@ -20,7 +20,7 @@ struct ResponseState {
 
 namespace Response {
 	std::string		build(const ResponseState &resp);
-    void            finalizeResponse(ResponseState &resp, const std::string &path);
+    void            finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize);
 	std::string		getHttpDate();
 	std::string		getStatusText(int code);
 };

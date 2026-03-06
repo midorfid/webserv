@@ -1,9 +1,12 @@
 #include "response.hpp"
 
 void
-Response::finalizeResponse(ResponseState &resp, const std::string &path) {
+Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize) {
 	resp.addHeader("Date", Response::getHttpDate());
 	resp.addHeader("Server", "Webserv/ver 1.0");
+	resp.addHeader("Content-Length", std::to_string(bodySize));
+	if ()
+	resp.addHeader("Connection", std::to_string(bodySize));
 
     switch(resp.status_code) {
         case 201:

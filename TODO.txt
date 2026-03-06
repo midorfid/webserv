@@ -1,3 +1,7 @@
+Gotta add check to routerequest, particulary in ResolvedAction struct a connection flag and then add header to the response based on that flag.
+
+
+
 //TODO WIP -> move request path normalization to parser from the handler. -> 
 //TODO add intermediate step router which concatenate req path with loc path = phys path and passes it to handler to abstract it more
 change the way limit_except is parsed and stored, use int bitmask to optimize the comparison

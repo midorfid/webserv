@@ -34,7 +34,7 @@ class Location : public AConfigBlock {
 		bool						checkLimExceptAccess(const std::string &meth, const std::string &ip) const;
 
 		bool							hasRedirect() const;
-		void							setRedirect(int, const std::string &);
+		void							setRedirect(const std::string &url, int status_code);
 		std::pair<int, std::string>		getRedirect() const;
 		// void						_setDirective(const std::string &key, const std::string &value);
         // void						_setMultiDirective(const std::string &key, const std::vector<std::string> &value);

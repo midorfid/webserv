@@ -140,6 +140,7 @@ std::string	normalizePath(const std::string &req_path) {
 	std::stringstream			ss(req_path);
 	std::string					token;
 
+	std::cout << req_path << std::endl;
 	if (req_path == "/")
 		return req_path;
 	while (std::getline(ss, token, '/')) {
@@ -176,7 +177,7 @@ ParseResult ParseRequest::parseReqLineHeaders(std::string &reqNoBody, HttpReques
 		return UrlTooLong;
 	
 	parseHeaders(reqNoBody, req);
-	req.setPath(normalizePath(req.getPath()));
+	// req.setPath(normalizePath(req.getPath()));
 	return Okay;
 }
 

@@ -24,7 +24,7 @@ bool
 Location::hasRedirect() const { return _hasRedirect;}
 
 void
-Location::setRedirect(int status_code, const std::string &url) {
+Location::setRedirect(const std::string &url, int status_code) {
 	_hasRedirect = true;
 	_redirectCode = status_code;
 	_redirectURL = url;
