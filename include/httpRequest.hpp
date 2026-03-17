@@ -28,6 +28,7 @@ class HttpRequest {
 		void				setBody(const std::string &body);
 		void				addHeader(const std::string &key, const std::string &value);
 
+		bool				isKeepAlive() const;
 	private:
 		std::string							_method;
 		std::string							_path;

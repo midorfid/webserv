@@ -22,18 +22,21 @@ const Location	*RouteRequest::findBestLocationMatch(const Config &serv_cfg, cons
 	return best_match;
 }
 
-ResolvedAction	RouteRequest::resolveErrorAction(int error_code, const Config &serv_cfg) {
+ResolvedAction	RouteRequest::resolveErrorAction(int error_code, const Config &serv_cfg, ResolvedAction &action) {
 	std::string		error_url;
 
 	if (serv_cfg.getErrorPage(error_code, error_url)) {
 		const Location *location = findBestLocationMatch(serv_cfg, error_url);
-
-		std::string root = location->getPath();
+		std::string root;
+		if (location != NULL)
+			location->getDirective("root", root);
+		else
+			serv_cfg.getDirective("root", root);
+		
 		std::string file_path = root + error_url;
 		
 		struct stat st;
 		if (stat(file_path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
-			ResolvedAction	action;
 			
 			action.st = st;
 			action.status_code = error_code;
@@ -43,18 +46,14 @@ ResolvedAction	RouteRequest::resolveErrorAction(int error_code, const Config &se
 			return action;
 		}
 	}
-	ResolvedAction	default_action;
-
-	default_action.status_code = error_code;
-	default_action.type = ACTION_GENERATE_ERROR;
+	action.status_code = error_code;
+	action.type = ACTION_GENERATE_ERROR;
 	
-	return default_action;
+	return action;
 }
 
-ResolvedAction RouteRequest::resolveFileAction(const std::string &path, struct stat *st) {
-	ResolvedAction	action;
+ResolvedAction RouteRequest::resolveFileAction(const std::string &path, ResolvedAction &action) {
 
-	action.st = *st;
 	action.status_code = 200;
 	action.type = ACTION_SERVE_FILE;
 	action.target_path = path;
@@ -83,10 +82,8 @@ bool RouteRequest::NoSlash(const std::string &str) {
 	return (str.back() == '/') ? false : true;
 }
 
-ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, struct stat *st, int status_code) {
-	ResolvedAction	action;
+ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, ResolvedAction &action, int status_code) {
 
-	action.st = *st;
 	action.status_code = status_code;
 	action.target_path = dir_path;
 	action.type = ACTION_REDIRECT;
@@ -94,12 +91,11 @@ ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, struct
 }
 
 ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const Config &cfg,
-												struct stat *st, const Location *location) {
-	ResolvedAction				action;
+												const Location *location, ResolvedAction &action) {
 	std::vector<std::string>	indexes;
 	
 	if (NoSlash(dir_path))
-		return resolveRedirect(dir_path + '/', st);
+		return resolveRedirect(action.req_path + '/', action);
 
 	if (location->getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
 		return action;
@@ -108,55 +104,60 @@ ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const
 
 	std::string	autoindex;
 	if (location->isAutoindexOn()) {
-		action.st = *st;
 		action.status_code = 200;
 		action.target_path = dir_path;
 		action.type = ACTION_AUTOINDEX;
 		return action;
 	}
-	return resolveErrorAction(403, cfg);
+	return resolveErrorAction(403, cfg, action);
 }
 
 
-ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location, struct stat *st) {
-	if (stat(path.c_str(), st) != 0) {
+ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location, ResolvedAction &action) {
+	if (stat(path.c_str(), &action.st) != 0) {
 		switch(errno) {
 			case ENOENT:
-				return resolveErrorAction(404, cfg);
+				return resolveErrorAction(404, cfg, action);
 			case EACCES:
-				return resolveErrorAction(403, cfg);
+				return resolveErrorAction(403, cfg, action);
 			default:
-				return resolveErrorAction(500, cfg);
+				return resolveErrorAction(500, cfg, action);
 		}
 	}
-	if (S_ISDIR(st->st_mode)) {
-		return resolveDirAction(path, cfg, st, location);
+	if (S_ISDIR((&action.st)->st_mode)) {
+		return resolveDirAction(path, cfg, location, action);
 	}
-	else if (S_ISREG(st->st_mode))
-		return resolveFileAction(path, st);
+	else if (S_ISREG((&action.st)->st_mode))
+		return resolveFileAction(path, action);
 	//Fallback
-	return resolveErrorAction(403, cfg);
+	return resolveErrorAction(403, cfg, action);
 }
 
 ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req, const std::string &client_ip) {
-	struct stat				st;
+	ResolvedAction			action;
 	std::string				phys_path;
 	const std::string		&req_path = req.getPath();
+	
+	action.keep_alive = false;
+	action.req_path = req.getPath();
 
-	std::cout << req_path << std::endl;
+	if (req.isKeepAlive() && serv_cfg.isKeepAlive())
+		action.keep_alive = true;
+	
 	const Location *location = findBestLocationMatch(serv_cfg, req_path);
 	if (location == NULL) {
-		return resolveErrorAction(404, serv_cfg);
+		return resolveErrorAction(404, serv_cfg, action);
 	}
 	if (location && location->hasRedirect()) {
 		std::pair<int, std::string> redirInfo = location->getRedirect();
-		return resolveRedirect(redirInfo.second, &st, redirInfo.first);
+		return resolveRedirect(redirInfo.second, action, redirInfo.first);
 	}
 	if (!location->checkLimExceptAccess(req.getMethod(), client_ip)) {
-		return resolveErrorAction(403, serv_cfg);
+		return resolveErrorAction(403, serv_cfg, action);
 	}
+	PathFinder(req, *location, serv_cfg, action);
 
-	return PathFinder(req, *location, serv_cfg, &st);
+	return action; 
 }
 
 std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st) {
@@ -165,8 +166,11 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 		full_path = reqPath;
 	}
 	else {
+		if (root_path.back() == '/' && reqPath.front() == '/')
+			root_path.erase(--root_path.end());
 		full_path = root_path + reqPath;
 	}
+	std::cout << full_path << std::endl;
 	if (stat(full_path.c_str(), st) != 0) {
 		logTime(ERRLOG);
 		std::cerr << "RouteRequest::catPathes() stat() failed :(" << std::endl;
@@ -175,22 +179,24 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 	return full_path;
 }
 
-ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, struct stat *st) {
+ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, ResolvedAction &action) {
 	std::string root_path;
 
-	if (loc.getDirective("root", root_path) == false)
-		resolveErrorAction(500, serv_cfg);
-	const std::string &full_path = catPathes(req.getPath(), root_path, st);
+	if (loc.getDirective("root", root_path) == false) {
+		if (serv_cfg.getDirective("root", root_path) == false)
+			return resolveErrorAction(500, serv_cfg, action);
+	}
+	const std::string &full_path = catPathes(req.getPath(), root_path, &action.st);
 	
 	if (loc.isCgiRequest(full_path)) {
-		return resolveCgiScript(serv_cfg, req, full_path, st);
+		return resolveCgiScript(serv_cfg, req, full_path, action);
 	}
 
-	return checkReqPath(full_path, serv_cfg, &loc, st);
+	return checkReqPath(full_path, serv_cfg, &loc, action);
 }
 
 ResolvedAction
-RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, struct stat *st) {
+RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, ResolvedAction &action) {
 	pid_t	cpid;
 	int		serv_to_cgi[2];
 	int		cgi_to_serv[2];
@@ -198,13 +204,13 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 	if (pipe(serv_to_cgi) == -1 || pipe(cgi_to_serv) == -1) {
 		logTime(ERRLOG);
 		std::cerr << "pipe" << std::endl;
-		resolveErrorAction(500, serv_cfg);
+		resolveErrorAction(500, serv_cfg, action);
 	}
 	cpid = fork();
 	if (cpid == -1) {
 		logTime(ERRLOG);
 		std::cerr << "fork" << std::endl;
-		resolveErrorAction(500, serv_cfg);
+		resolveErrorAction(500, serv_cfg, action);
 	}
 	if (cpid == 0) {
 		close(cgi_to_serv[0]);
@@ -213,12 +219,12 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 		if (dup2(serv_to_cgi[0], STDIN_FILENO) == -1) {
 			logTime(ERRLOG);
 			std::cerr << "dup2" << std::endl;
-			resolveErrorAction(500, serv_cfg);
+			resolveErrorAction(500, serv_cfg, action);
 		}
 		if (dup2(cgi_to_serv[1], STDOUT_FILENO) == -1) {
 			logTime(ERRLOG);
 			std::cerr << "dup2" << std::endl;
-			resolveErrorAction(500, serv_cfg);
+			resolveErrorAction(500, serv_cfg, action);
 		}
 
 		close(cgi_to_serv[1]);
@@ -249,12 +255,10 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 			fcntl(cgi_to_serv[0], F_SETFL, O_NONBLOCK) == -1) {
 				logTime(ERRLOG);
 				std::cerr << "fcntl" << std::endl;
-				resolveErrorAction(500, serv_cfg);
+				resolveErrorAction(500, serv_cfg, action);
 		}
 		
-		ResolvedAction	action;
 		
-		action.st = *st;
 		action.type = ACTION_CGI;
 		action.status_code = 200;
 		action.target_path = full_path;

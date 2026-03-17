@@ -1,13 +1,14 @@
 #include "response.hpp"
 
 void
-Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize) {
+Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize, bool isConKeepAlive) {
 	resp.addHeader("Date", Response::getHttpDate());
 	resp.addHeader("Server", "Webserv/ver 1.0");
 	resp.addHeader("Content-Length", std::to_string(bodySize));
-	if ()
-	resp.addHeader("Connection", std::to_string(bodySize));
-
+	if (isConKeepAlive)
+		resp.addHeader("Connection", "Keep-Alive");
+	else
+		resp.addHeader("Connection", "Closed");
     switch(resp.status_code) {
         case 201:
             resp.addHeader("Location", path);

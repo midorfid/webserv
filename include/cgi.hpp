@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RouteRequest.hpp"
+
 class CgiInfo {
     private:
         bool            _is_cgi;
@@ -23,9 +25,9 @@ class CgiInfo {
             return *this;
         }
 
-        void    addFds(int read_fd, int write_fd) {
-            _read_fd = read_fd;
-            _write_fd = write_fd;
+        void    addFds(const ResolvedAction &action) {
+            _read_fd = action.cgi_fds.first;
+            _write_fd = action.cgi_fds.second;
         }
 
         bool            isCgi() const {return _is_cgi;}

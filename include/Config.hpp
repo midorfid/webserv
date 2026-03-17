@@ -26,6 +26,7 @@ class Config : public AConfigBlock {
 		Location					&getNewLocation();
 		void						setKeepAliveTimer(int);
 
+		bool						isKeepAlive() const;
 	private:
 
 		void				    					setError_page(const std::string &value);

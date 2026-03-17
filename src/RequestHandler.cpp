@@ -64,9 +64,7 @@ void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) con
 	
 	ResponseState res(action.status_code);
 	
-	res.addHeader("Content-Length", std::to_string(file_size));
-	
-	Response::finalizeResponse(res, action.target_path);
+	Response::finalizeResponse(res, action.target_path, file_size, action.keep_alive);
 
 	const std::string response = Response::build(res);
 	sendString(client_fd, response);
@@ -147,10 +145,12 @@ std::string		RequestHandler::generatePage(int error_code, const std::string &tex
 	return ss.str();
 }
 
-void			RequestHandler::sendDir(const std::string &phys_path, int client_fd, const std::string &logic_path) const{
-	ResponseState state = createDirListHtml(phys_path, logic_path);
+void			RequestHandler::sendDir(const ResolvedAction &action, int client_fd, const std::string &logic_path) const{
+	long int dir_size = action.st.st_size;
+
+	ResponseState state = createDirListHtml(action.target_path, logic_path);
 	
-	Response::finalizeResponse(state, logic_path);
+	Response::finalizeResponse(state, logic_path, dir_size, action.keep_alive);
 	
 	const std::string resp = Response::build(state);
 	sendString(client_fd, resp);
@@ -198,45 +198,57 @@ std::string RequestHandler::checkFileExtension(const HttpRequest &req) {
 	return req.getPath() + ".bin";
 }
 
-void 
-RequestHandler::putBinary(const HttpRequest &req, int client_fd) {
-	const std::string &url_path = checkFileExtension(req);
-	int status_code = checkFileCreation(url_path, req);
+// void 
+// RequestHandler::putBinary(const HttpRequest &req, int client_fd) {
+// 	const std::string &url_path = checkFileExtension(req);
+// 	int status_code = checkFileCreation(url_path, req);
 	
-	ResponseState resp(status_code);
+// 	ResponseState resp(status_code);
 
-	if (status_code >= 400) {
-		resp.body = generatePage(status_code, Response::getStatusText(status_code));
-	}
-	else {
-		resp.body = "";
-	}
+// 	if (status_code >= 400) {
+// 		resp.body = generatePage(status_code, Response::getStatusText(status_code));
+// 	}
+// 	else {
+// 		resp.body = "";
+// 	}
 
-	Response::finalizeResponse(resp, req.getPath());
+// 	Response::finalizeResponse(resp, req.getPath(), resp.body.length(), action.keep_alive); // todo
 
-	sendString(client_fd, Response::build(resp));
-}
+// 	sendString(client_fd, Response::build(resp));
+// }
 
-void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
-	ResponseState status;
+// void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
+// 	ResponseState status;
 	
-	std::string contentType = req.getHeader("content-type");
-	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
-		putBinary(req, client_fd);
-	}
-	// TODO create response struct as well as response builder to keep DRY
-	//2) send response
-	(void)serv_cfg;
-}
+// 	std::string contentType = req.getHeader("content-type");
+// 	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
+// 		putBinary(req, client_fd);
+// 	}
+// 	// TODO create response struct as well as response builder to keep DRY
+// 	//2) send response
+// 	(void)serv_cfg;
+// }
 
 void
 RequestHandler::sendDefaultError(int status_code, int client_fd) const{
 	ResponseState resp(status_code);
-	
+
 	resp.body = generatePage(status_code, Response::getStatusText(status_code));
-	Response::finalizeResponse(resp, "");
+	Response::finalizeResponse(resp, "", resp.body.length());
 	std::string toSend = Response::build(resp);
 
+	sendString(client_fd, toSend);
+}
+
+void
+RequestHandler::sendDefaultError(const ResolvedAction &action, int client_fd) const{
+	ResponseState resp(action.status_code);
+	
+	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
+	Response::finalizeResponse(resp, "", resp.body.length(), action.keep_alive);
+	std::string toSend = Response::build(resp);
+
+	std::cout << toSend << std::endl;
 	sendString(client_fd, toSend);
 }
 
@@ -246,7 +258,7 @@ RequestHandler::redirect(int client_fd, const ResolvedAction &action) const{
 
 	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
 
-	Response::finalizeResponse(resp, action.target_path, resp.body.length());
+	Response::finalizeResponse(resp, action.target_path, resp.body.length(), action.keep_alive);
 	std::string toSend = Response::build(resp);
 	std::cout << toSend;
 	sendString(client_fd, toSend);
@@ -257,15 +269,15 @@ void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &stat
 		case ACTION_SERVE_FILE:
 			return sendFile(action, client_fd);
 		case ACTION_GENERATE_ERROR:
-			return sendDefaultError(action.status_code, client_fd);
+			return sendDefaultError(action, client_fd);
 		case ACTION_AUTOINDEX:
-			return sendDir(action.target_path, client_fd, req.getPath());
+			return sendDir(action, client_fd, req.getPath());
 		case ACTION_CGI:
-			return state.addFds(action.cgi_fds.first, action.cgi_fds.second); // return 200 status code?
+			return state.addFds(action); // return 200 status code?
 		case ACTION_REDIRECT:
 			return redirect(client_fd, action);
 		default:
-			return sendDefaultError(action.status_code, client_fd);
+			return sendDefaultError(action, client_fd);
 	}
 }
 

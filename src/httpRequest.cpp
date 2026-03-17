@@ -60,3 +60,7 @@ HttpRequest::headers() const {
 	return _headers;
 }
 
+bool
+HttpRequest::isKeepAlive() const {
+	return getHeader("connection") == "keep-alive" ? true : false; // I do tolower, don't I
+}

@@ -36,10 +36,10 @@ const std::vector<Location>		&Config::getLocations() const {
 }
 
 bool		Config::getErrorPage(int code, std::string &errorPage) const {
-    std::map<int, std::string>::const_iterator	it;
+    std::map<std::string, std::string>::const_iterator	it;
 
-    it = _error_pages.find(code);
-    if (it == _error_pages.end())
+    it = Config::AConfigBlock::_error_pages.find(std::to_string(code));
+    if (it == Config::AConfigBlock::_error_pages.end())
         return false;
     errorPage = it->second;
     return true;
@@ -86,4 +86,11 @@ Config::setMaxBodySize(int lim) {
 int
 Config::getMaxBodySize() const {
     return _max_body_size;
+}
+
+bool
+Config::isKeepAlive() const {
+	if (_keepalive_timer > 0)
+        return true;
+    return false;
 }
