@@ -25,6 +25,7 @@ class Server {
 
         bool                                    epoll_add_cgi(std::pair<int, int> cgi_fds, int client_fd);
         const Config                            getConfig() const;
+        static void                             handle_signal(int signum);
 
     private:
 
@@ -37,7 +38,12 @@ class Server {
 		RouteRequest	                        _route_reslvr;
         RequestHandler                          _handler;
         std::map<int, int>                      _cgi_client;
-        
+
+        static int                              _signal_write_fd;
+
+        int                                     _signal_read_fd;
+
+        void            cleanup();
         void            disconnect_ifNoKeepAlive(Client &client, int client_fd);
         void            terminateConnWithError(int client_fd, int error_code);
         void            handleDefault(Client &client, int client_fd);

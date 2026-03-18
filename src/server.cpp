@@ -17,9 +17,12 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <ctime>
+#include <csignal>
 
 #define LISTEN_BACKLOG 50
 #define MAX_EVENTS 10
+
+int Server::_signal_write_fd = -1;
 
 void	Server::hints_init(struct addrinfo *hints) {
 	memset(hints, 0, sizeof(*hints));
@@ -193,20 +196,41 @@ void	Server::checkTimeouts() {
 	}
 }
 
+void
+Server::cleanup() {
+	std::cout << "cleanup" << std::endl;
+	exit(EXIT_FAILURE);
+}
+
+void
+Server::handle_signal(int signum) {
+	(void)signum;
+
+	char c = 'X';
+
+	write(_signal_write_fd, &c, 1);
+}
+
 void	Server::run_event_loop(epoll_event *ev) {
 	int                 			conn_sock, nfds;
 	struct epoll_event				events[MAX_EVENTS];
 	// std::map<int, Client>			clients;
 
+	signal(SIGINT, Server::handle_signal);
+
 	for (;;) {
 		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, 1000);
 		if (nfds == -1) {
+			if (errno == EINTR)
+				continue;
 			logTime(ERRLOG);
 			fprintf(stderr, "epoll_wait: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 		for (int i = 0; i < nfds; ++i) {
 			int curr_fd = events[i].data.fd;
+			if (curr_fd == _signal_read_fd)
+				cleanup();
 			if (curr_fd == this->_listen_sock) {
 				struct	sockaddr_storage	client_addr;
 				socklen_t	clientaddr_len = sizeof(client_addr);
@@ -220,7 +244,6 @@ void	Server::run_event_loop(epoll_event *ev) {
 						fprintf(stderr, "accept: %s\n", strerror(errno));
 						continue;
 					}
-
 				}
 				if (fcntl(conn_sock, F_SETFL, O_NONBLOCK) == -1) {
 					logTime(ERRLOG);
@@ -261,7 +284,6 @@ void	Server::run_event_loop(epoll_event *ev) {
 		}
 		checkTimeouts();
 	}
-	
 }
 
 
@@ -295,7 +317,13 @@ Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
 	return true;
 }
 
-Server::Server() : _listen_sock(-1), _epoll_fd(-1), _clients() {}
+Server::Server() : _listen_sock(-1), _epoll_fd(-1), _clients() {
+	int signal_fds[2];
+	if (pipe(signal_fds) == 0) {
+		_signal_read_fd = signal_fds[0];
+		_signal_write_fd = signal_fds[1];
+	}
+}
 
 Server::~Server() {
 	if (this->_listen_sock != -1)
