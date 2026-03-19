@@ -1,0 +1,15 @@
+{
+	"image": "mcr.microsoft.com/devcontainers/universal:2",
+	"features": {
+        "postCreateCommand": "sudo apt update && sudo apt install valgrind -y",
+		"ghcr.io/wxw-matt/devcontainer-features/command_runner:0": {}
+	},
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack"
+            ]
+        }
+    }
+}

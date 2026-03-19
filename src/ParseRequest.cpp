@@ -157,7 +157,7 @@ std::string	normalizePath(const std::string &req_path) {
 			stack.push_back(token);
 	}
 	std::string norm_path = "";
-	if (req_path[0] == '/') norm_path == "/";
+	if (req_path[0] == '/') norm_path = "/";
 
 	for (size_t i = 0; i < stack.size(); ++i) {
 		norm_path += stack[i];

@@ -19,6 +19,7 @@ class Server {
 
         void    run(const std::string &cfg_file);
 
+        std::map<int,Client>::iterator	        disconnect_client(std::map<int,Client>::iterator &it, int client_fd);
         void    		        				disconnect_client(int client_fd);
         const std::string       				&port() const;
         std::pair<std::string, std::string>		getClientAddr(struct sockaddr_storage &client_addr);

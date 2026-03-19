@@ -12,7 +12,8 @@
 
 Client::Client() : _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
 
-Client::~Client() {}
+Client::~Client() {
+}
 
 Client::Client(const Client &other) { *this = other; }
 

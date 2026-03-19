@@ -40,11 +40,21 @@ void	Server::disconnect_client(int client_fd) {
 		fprintf(stderr, "epoll_ctl (DEL): %s\n", strerror(errno));
 	}
 	close(client_fd);
-	_clients.erase(client_fd);
 	logTime(REGLOG);
+	_clients.erase(client_fd);
 	std::cout << "Client on fd " << client_fd << " disconnected." << std::endl;
 }
 
+std::map<int,Client>::iterator	Server::disconnect_client(std::map<int,Client>::iterator &it, int client_fd) {
+	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL) == -1) {
+		logTime(ERRLOG);
+		fprintf(stderr, "epoll_ctl (DEL): %s\n", strerror(errno));
+	}
+	close(client_fd);
+	logTime(REGLOG);
+	std::cout << "Client on fd " << client_fd << " disconnected." << std::endl;
+	return	_clients.erase(it);
+}
 
 void Server::run(const std::string &cfg_file) {
 	struct epoll_event		ev;
@@ -124,6 +134,12 @@ void	Server::init_epoll(epoll_event *ev) {
 		fprintf(stderr, "epoll_ctl: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
+	ev->data.fd = this->_signal_read_fd;
+	if (epoll_ctl(this->_epoll_fd, EPOLL_CTL_ADD, this->_signal_read_fd, ev) == -1) {
+		logTime(ERRLOG);
+		fprintf(stderr, "epoll_ctl: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 }
 void 
 Server::handle_cgi_write(int write_fd) {
@@ -178,28 +194,30 @@ Server::diffTime(const time_t &client_tm) {
 }
 
 void	Server::checkTimeouts() {
-	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end();) {
 		double quiet_time = diffTime(it->second.getLastActivity());
 
 		if (it->second.getClientState() != IDLE) {
 			if (quiet_time > 60) {
 				_handler.sendDefaultError(408, it->first);
-				disconnect_client(it->first);
+				it = disconnect_client(it, it->first);
 			}
 		}
-		else {
-			if (quiet_time > static_cast<double>(_config.getKeepAliveTimer()))
-				disconnect_client(it->first);
+		else if (quiet_time > static_cast<double>(_config.getKeepAliveTimer())) {
+			it = disconnect_client(it, it->first);
 		}
-		if (_clients.empty())
+		else if (_clients.empty())
 			break;
+		else
+			++it;
 	}
 }
 
 void
-Server::cleanup() {
+Server::cleanup() { // here
 	std::cout << "cleanup" << std::endl;
-	exit(EXIT_FAILURE);
+	this->~Server();
+	exit(EXIT_SUCCESS);
 }
 
 void
@@ -332,7 +350,7 @@ Server::~Server() {
 		close(this->_epoll_fd);
 	// std::map<int, Client>::iterator it = _clients.begin();
 	// for (;it != _clients.end(); ++it) {
-	// 	delete &it->second;
+	// 	it->second.~Client();
 	// }
 }
 
