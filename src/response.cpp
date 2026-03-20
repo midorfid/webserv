@@ -6,9 +6,9 @@ Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t 
 	resp.addHeader("Server", "Webserv/ver 1.0");
 	resp.addHeader("Content-Length", std::to_string(bodySize));
 	if (isConKeepAlive)
-		resp.addHeader("Connection", "Keep-Alive");
+		resp.addHeader("Connection", "keep-alive");
 	else
-		resp.addHeader("Connection", "Closed");
+		resp.addHeader("Connection", "closed");
     switch(resp.status_code) {
         case 201:
             resp.addHeader("Location", path);

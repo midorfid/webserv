@@ -156,12 +156,13 @@ void			RequestHandler::sendDir(const ResolvedAction &action, int client_fd, cons
 	sendString(client_fd, resp);
 }
 
-int RequestHandler::checkFileCreation(const std::string &url_path, const HttpRequest &req) {
+int RequestHandler::executePut(const std::string &url_path, const HttpRequest &req) const{
 	struct stat info;
 	
 	size_t par_dir_pos = url_path.find_last_of('/');
 
-	std::string parent_dir = (par_dir_pos == std::string::npos) ? "./" : url_path.substr(par_dir_pos);
+	std::string parent_dir = (par_dir_pos == std::string::npos) ? "./" : url_path.substr(0, par_dir_pos);
+	if (parent_dir.empty()) parent_dir = "/";
 
 	if (stat(parent_dir.c_str(), &info) != 0)
 		return 404;
@@ -176,15 +177,43 @@ int RequestHandler::checkFileCreation(const std::string &url_path, const HttpReq
 		
 		return 204; //(overwrite)
 	}
-	std::ofstream outfile(url_path, std::ios::binary | std::ios::trunc);
-	outfile.write(req.getBody().c_str(), req.getBody().size());
-	outfile.close();
-	if (!outfile.is_open())
-		return 500;
-	return 201; //new file
+	return uploadFile(req, url_path);
 }
 
-std::string RequestHandler::checkFileExtension(const HttpRequest &req) {
+int	RequestHandler::uploadFile(const HttpRequest &req, const std::string &file_path) const{
+	std::ofstream	file(file_path.c_str(),  std::ios::binary | std::ios::trunc);
+	if (!file.is_open())
+		return 500;
+
+	while (file.good()) {
+		file.write(req.getBody().c_str(), req.getBody().size());
+	}
+	return 201;
+}
+
+std::string
+RequestHandler::getExtensionFromMime(const std::string &mime_type) const{
+	static std::map<std::string, std::string>	mime_map;
+
+	if (mime_map.empty()) {
+		mime_map["image/jpeg"] = ".jpg";
+		mime_map["image/png"] = ".png";
+		mime_map["image/gif"] = ".gif";
+		mime_map["image/webp"] = ".webp";
+		mime_map["text/plain"] = ".txt";
+		mime_map["text/html"] = ".html";
+		mime_map["application/json"] = ".json";
+		mime_map["application/pdf"] = ".pdf";
+	}
+	std::map<std::string, std::string>::const_iterator it = mime_map.find(mime_type);
+
+	if (it != mime_map.end())
+		return it->second;
+	
+	return ".bin";
+}
+
+std::string RequestHandler::manageFileExtension(const HttpRequest &req) const{
 	size_t extension_pos = req.getPath().rfind('.');
 
 	if (extension_pos != std::string::npos)
@@ -192,42 +221,41 @@ std::string RequestHandler::checkFileExtension(const HttpRequest &req) {
 
 	std::string con_type_exten = req.getHeader("content-type");
 
-	if (con_type_exten != "")
-		return req.getPath() + con_type_exten;
+	if (con_type_exten.empty())
+		return req.getPath() + getExtensionFromMime(con_type_exten);
 
 	return req.getPath() + ".bin";
 }
 
-// void 
-// RequestHandler::putBinary(const HttpRequest &req, int client_fd) {
-// 	const std::string &url_path = checkFileExtension(req);
-// 	int status_code = checkFileCreation(url_path, req);
+void 
+RequestHandler::putBinary(const HttpRequest &req, int client_fd, const ResolvedAction &action) const{
+	const std::string &url_path = manageFileExtension(req);
+	int status_code = executePut(url_path, req);
 	
-// 	ResponseState resp(status_code);
+	ResponseState resp(status_code);
 
-// 	if (status_code >= 400) {
-// 		resp.body = generatePage(status_code, Response::getStatusText(status_code));
-// 	}
-// 	else {
-// 		resp.body = "";
-// 	}
+	if (status_code >= 400) {
+		resp.body = generatePage(status_code, Response::getStatusText(status_code));
+	}
+	else {
+		resp.body = "";
+	}
 
-// 	Response::finalizeResponse(resp, req.getPath(), resp.body.length(), action.keep_alive); // todo
+	Response::finalizeResponse(resp, req.getPath(), resp.body.length(), action.keep_alive); // todo
 
-// 	sendString(client_fd, Response::build(resp));
-// }
+	sendString(client_fd, Response::build(resp));
+}
 
-// void RequestHandler::handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd) {
-// 	ResponseState status;
+void RequestHandler::handlePut(const HttpRequest &req, int client_fd, const ResolvedAction &action) const{
+	ResponseState status;
 	
-// 	std::string contentType = req.getHeader("content-type");
-// 	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
-// 		putBinary(req, client_fd);
-// 	}
-// 	// TODO create response struct as well as response builder to keep DRY
-// 	//2) send response
-// 	(void)serv_cfg;
-// }
+	std::string contentType = req.getHeader("content-type");
+	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
+		putBinary(req, client_fd, action);
+	}
+	// TODO create response struct as well as response builder to keep DRY
+	//2) send response
+}
 
 void
 RequestHandler::sendDefaultError(int status_code, int client_fd) const{
@@ -276,6 +304,8 @@ void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &stat
 			return state.addFds(action); // return 200 status code?
 		case ACTION_REDIRECT:
 			return redirect(client_fd, action);
+		case ACTION_UPLOAD_FILE:
+			return handlePut(req, client_fd, action);
 		default:
 			return sendDefaultError(action, client_fd);
 	}

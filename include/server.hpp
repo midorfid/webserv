@@ -25,7 +25,7 @@ class Server {
         std::pair<std::string, std::string>		getClientAddr(struct sockaddr_storage &client_addr);
 
         bool                                    epoll_add_cgi(std::pair<int, int> cgi_fds, int client_fd);
-        const Config                            getConfig() const;
+        const Config                            &getConfig() const;
         static void                             handle_signal(int signum);
 
     private:

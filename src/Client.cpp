@@ -66,8 +66,10 @@ Client::processNewData(Server &server) {
 					return status;
 				std::string len_str = _req.getHeader("content-length");
 				if (!len_str.empty()) {
-					size_t len = std::strtoul(len_str.c_str(), NULL, 10); 
-					if (len > static_cast<size_t>(server.getConfig().getMaxBodySize()))
+					int len = std::strtoul(len_str.c_str(), NULL, 10);
+					int max_body_size = server.getConfig().getMaxBodySize();
+					std::cout << "actual len:" << len << " max_body_size:" << max_body_size << std::endl;
+					if (len > max_body_size)
 						return BodyTooLarge;
 				}
 				if (_req.getHeader("connection") == "close")

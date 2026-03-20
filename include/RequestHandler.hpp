@@ -32,9 +32,12 @@ class RequestHandler {
 		void			sendFile(const ResolvedAction &action, int client_fd) const;
 		void			sendDir(const ResolvedAction &action, int client_fd, const std::string &logic_path) const;
 		
-		int						checkFileCreation(const std::string &url_path, const HttpRequest &req);
-		std::string				checkFileExtension(const HttpRequest &req);
-		void					handlePut(const Config &serv_cfg, const HttpRequest &req, int client_fd);
-		void					putBinary(const HttpRequest &req, int client_fd);
+		int						executePut(const std::string &url_path, const HttpRequest &req) const;
+		std::string				manageFileExtension(const HttpRequest &req) const;
+		void					handlePut(const HttpRequest &req, int client_fd, const ResolvedAction &action) const;
+		void					putBinary(const HttpRequest &req, int client_fd, const ResolvedAction &action) const;
 		std::string				generatePage(int error_code, const std::string &text, const std::string &details = "") const;
+		int						uploadFile(const HttpRequest &req, const std::string &file_path) const;
+
+		std::string				getExtensionFromMime(const std::string &mime_type) const;
 };

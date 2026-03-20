@@ -112,8 +112,16 @@ ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const
 	return resolveErrorAction(403, cfg, action);
 }
 
+ResolvedAction
+RouteRequest::resolvePutUpload(const std::string &path, ResolvedAction &action) {
+	action.target_path = path;
+	
+	return action;
+}
 
 ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location, ResolvedAction &action) {
+	if (action.type == ACTION_UPLOAD_FILE)
+		return resolvePutUpload(path, action);
 	if (stat(path.c_str(), &action.st) != 0) {
 		switch(errno) {
 			case ENOENT:
@@ -140,6 +148,7 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	
 	action.keep_alive = false;
 	action.req_path = req.getPath();
+	action.type = ACTION_NONE;
 
 	if (req.isKeepAlive() && serv_cfg.isKeepAlive())
 		action.keep_alive = true;
@@ -155,6 +164,8 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	if (!location->checkLimExceptAccess(req.getMethod(), client_ip)) {
 		return resolveErrorAction(403, serv_cfg, action);
 	}
+	if (req.getMethod() == "PUT")
+		action.type = ACTION_UPLOAD_FILE;
 	PathFinder(req, *location, serv_cfg, action);
 
 	return action; 

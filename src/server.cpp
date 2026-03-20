@@ -458,7 +458,7 @@ Server::handle_client_event(int client_fd) {
 	}
 }
 
-const Config
+const Config &
 Server::getConfig() const{
 	return _config;
 }

@@ -14,6 +14,8 @@ enum ActionType {
 	ACTION_CGI,
 	ACTION_REDIRECT,
 	ACTION_RESOLVE_TO_HANDLER,
+	ACTION_UPLOAD_FILE,
+	ACTION_NONE,
 };
 
 struct ResolvedAction {
@@ -44,6 +46,7 @@ class RouteRequest {
 		ResolvedAction		resolveFileAction(const std::string &path, ResolvedAction &action);
 		ResolvedAction		resolveDirAction(const std::string &path, const Config &cfg,
 								const Location *location, ResolvedAction &action);
+		ResolvedAction		resolvePutUpload(const std::string &path, ResolvedAction &action);
 		bool				findAccessibleIndex(ResolvedAction &action, const std::string &dir_path,
 								const std::vector<std::string> &indexes);
         ResolvedAction      checkReqPath(const std::string &path, const Config &cfg, const Location *location, ResolvedAction &action);
