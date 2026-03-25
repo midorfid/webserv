@@ -15,6 +15,7 @@ enum ActionType {
 	ACTION_REDIRECT,
 	ACTION_RESOLVE_TO_HANDLER,
 	ACTION_UPLOAD_FILE,
+	ACTION_DELETE_FILE,
 	ACTION_NONE,
 };
 
@@ -51,4 +52,7 @@ class RouteRequest {
 								const std::vector<std::string> &indexes);
         ResolvedAction      checkReqPath(const std::string &path, const Config &cfg, const Location *location, ResolvedAction &action);
         ResolvedAction      resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, ResolvedAction &action);
+		void				setActionType(ResolvedAction &action, const std::string &met);
+		ResolvedAction		resolveDeleteAction(const std::string &path, ResolvedAction &action);
+		
 };

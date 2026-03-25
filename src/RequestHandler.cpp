@@ -64,7 +64,7 @@ void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) con
 	
 	ResponseState res(action.status_code);
 	
-	Response::finalizeResponse(res, action.target_path, file_size, action.keep_alive);
+	Response::finalizeResponse(res, action.req_path, file_size, action.keep_alive);
 
 	const std::string response = Response::build(res);
 	sendString(client_fd, response);
@@ -156,14 +156,22 @@ void			RequestHandler::sendDir(const ResolvedAction &action, int client_fd, cons
 	sendString(client_fd, resp);
 }
 
-int RequestHandler::executePut(const std::string &url_path, const HttpRequest &req, const std::string &req_path) const{
-	struct stat info;
-	
-	size_t par_dir_pos = url_path.find_last_of('/');
+std::string
+RequestHandler::getParentDir(const std::string &child_url) const{
+	size_t par_dir_pos = child_url.find_last_of('/');
 
-	std::string parent_dir = (par_dir_pos == std::string::npos) ? "./" : url_path.substr(0, par_dir_pos);
+	std::string parent_dir = (par_dir_pos == std::string::npos) ? "./" : child_url.substr(0, par_dir_pos);
+
 	if (parent_dir.empty()) parent_dir = "/";
 
+	return parent_dir;
+}
+
+int RequestHandler::executePut(const std::string &url_path, const HttpRequest &req, const std::string &req_path) const{
+	struct stat		info;
+	std::string		parent_dir;
+
+	parent_dir = getParentDir(url_path);
 	if (stat(parent_dir.c_str(), &info) != 0) {
 		return 404;
 	}
@@ -279,7 +287,6 @@ RequestHandler::sendDefaultError(const ResolvedAction &action, int client_fd) co
 	Response::finalizeResponse(resp, "", resp.body.length(), action.keep_alive);
 	std::string toSend = Response::build(resp);
 
-	std::cout << toSend << std::endl;
 	sendString(client_fd, toSend);
 }
 
@@ -291,7 +298,42 @@ RequestHandler::redirect(int client_fd, const ResolvedAction &action) const{
 
 	Response::finalizeResponse(resp, action.target_path, resp.body.length(), action.keep_alive);
 	std::string toSend = Response::build(resp);
-	std::cout << toSend;
+
+	sendString(client_fd, toSend);
+}
+
+int
+RequestHandler::deleteFileElseError(const ResolvedAction &action) const{
+	std::string		par_dir;
+	struct stat		info;
+
+	if (S_ISDIR(action.st.st_mode))
+		return 403;
+	if (access(action.target_path.c_str(), W_OK | X_OK) != 0)
+		return 403;
+
+	par_dir = getParentDir(action.target_path);
+
+	if (stat(par_dir.c_str(), &info) != 0)
+		return 404;
+	if (!S_ISDIR(info.st_mode))
+		return 403;
+	if (access(par_dir.c_str(), W_OK | X_OK) != 0)
+		return 403;
+	std::remove(action.target_path.c_str());
+
+	return 204;
+}
+
+void
+RequestHandler::handleDelete(int client_fd, const ResolvedAction &action) const{
+	int				status_code;
+
+	status_code = deleteFileElseError(action);
+	ResponseState resp(status_code);
+	Response::finalizeResponse(resp, action.req_path, resp.body.length(), action.keep_alive);
+
+	std::string toSend = Response::build(resp);
 	sendString(client_fd, toSend);
 }
 
@@ -309,6 +351,8 @@ void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &stat
 			return redirect(client_fd, action);
 		case ACTION_UPLOAD_FILE:
 			return handlePut(req, client_fd, action);
+		case ACTION_DELETE_FILE:
+			return handleDelete(client_fd, action);
 		default:
 			return sendDefaultError(action, client_fd);
 	}

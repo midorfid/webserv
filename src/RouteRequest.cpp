@@ -119,6 +119,13 @@ RouteRequest::resolvePutUpload(const std::string &path, ResolvedAction &action) 
 	return action;
 }
 
+ResolvedAction
+RouteRequest::resolveDeleteAction(const std::string &path, ResolvedAction &action) {
+	action.target_path = path;
+	
+	return action;
+}
+
 ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location, ResolvedAction &action) {
 	if (action.type == ACTION_UPLOAD_FILE)
 		return resolvePutUpload(path, action);
@@ -132,6 +139,8 @@ ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config 
 				return resolveErrorAction(500, cfg, action);
 		}
 	}
+	if (action.type == ACTION_DELETE_FILE)
+		return resolveDeleteAction(path, action);
 	if (S_ISDIR((&action.st)->st_mode)) {
 		return resolveDirAction(path, cfg, location, action);
 	}
@@ -147,11 +156,8 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	const std::string		&req_path = req.getPath();
 	
 	action.keep_alive = false;
-	action.req_path = req.getPath();
+	action.req_path = req_path;
 	action.type = ACTION_NONE;
-
-	if (req.isKeepAlive() && serv_cfg.isKeepAlive())
-		action.keep_alive = true;
 	
 	const Location *location = findBestLocationMatch(serv_cfg, req_path);
 	if (location == NULL) {
@@ -164,11 +170,23 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	if (!location->checkLimExceptAccess(req.getMethod(), client_ip)) {
 		return resolveErrorAction(403, serv_cfg, action);
 	}
-	if (req.getMethod() == "PUT")
-		action.type = ACTION_UPLOAD_FILE;
+
+	if (req.isKeepAlive() && serv_cfg.isKeepAlive())
+		action.keep_alive = true;
+	
+	setActionType(action, req.getMethod());
+
 	PathFinder(req, *location, serv_cfg, action);
 
 	return action; 
+}
+
+void 
+RouteRequest::setActionType(ResolvedAction &action, const std::string &met) {
+	if (met == "PUT")
+		action.type = ACTION_UPLOAD_FILE;
+	else if (met == "DELETE")
+		action.type = ACTION_DELETE_FILE;
 }
 
 std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st, ActionType at) {

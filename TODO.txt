@@ -1,4 +1,6 @@
-WIP put handle
+WIP DELETE method
+
+reconsider stat field in the action, isn't it useless?
 
 //TODO add client state and implement it into checkTimeouts() for the CGI scripts
 

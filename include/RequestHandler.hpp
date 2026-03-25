@@ -35,9 +35,13 @@ class RequestHandler {
 		int						executePut(const std::string &url_path, const HttpRequest &req, const std::string &req_path) const;
 		std::string				manageFileExtension(const HttpRequest &req, const std::string &phys_path) const;
 		void					handlePut(const HttpRequest &req, int client_fd, const ResolvedAction &action) const;
+		void					handleDelete(int client_fd, const ResolvedAction &action) const;
 		void					putBinary(const HttpRequest &req, int client_fd, const ResolvedAction &action) const;
 		std::string				generatePage(int error_code, const std::string &text, const std::string &details = "") const;
 		int						uploadFile(const HttpRequest &req, const std::string &file_path) const;
 
+		int						deleteFileElseError(const ResolvedAction &action) const;
+
+		std::string				getParentDir(const std::string &child_url) const;			
 		std::string				getExtensionFromMime(const std::string &mime_type) const;
 };
