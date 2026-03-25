@@ -203,10 +203,10 @@ void	Server::checkTimeouts() {
 				it = disconnect_client(it, it->first);
 			}
 		}
-		else if (quiet_time > static_cast<double>(_config.getKeepAliveTimer())) {
+		if (quiet_time > static_cast<double>(_config.getKeepAliveTimer())) {
 			it = disconnect_client(it, it->first);
 		}
-		else if (_clients.empty())
+		if (_clients.empty())
 			break;
 		else
 			++it;
@@ -405,6 +405,8 @@ Server::handleDefault(Client &client, int client_fd) {
 
 	_handler.handle(client.req(), client_fd, client.cgi_state(), action);
 
+	client.updateLastActivity();
+
 	const CgiInfo &cgi = client.cgi_state();
 
 	if (cgi.isCgi()) {
@@ -423,7 +425,7 @@ void
 Server::disconnect_ifNoKeepAlive(Client &client, int client_fd) {
 	if (!client.isKeepAliveConn())
 		return disconnect_client(client_fd);
-	client.reset();
+	// client.reset();
 }
 
 void

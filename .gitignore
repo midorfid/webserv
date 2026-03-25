@@ -12,5 +12,7 @@ Makefile
 webserv
 
 var/log/*
-
+images/
 !var/log/.gitkeep
+
+test_image.jpg

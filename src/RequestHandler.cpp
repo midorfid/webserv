@@ -156,7 +156,7 @@ void			RequestHandler::sendDir(const ResolvedAction &action, int client_fd, cons
 	sendString(client_fd, resp);
 }
 
-int RequestHandler::executePut(const std::string &url_path, const HttpRequest &req) const{
+int RequestHandler::executePut(const std::string &url_path, const HttpRequest &req, const std::string &req_path) const{
 	struct stat info;
 	
 	size_t par_dir_pos = url_path.find_last_of('/');
@@ -164,14 +164,15 @@ int RequestHandler::executePut(const std::string &url_path, const HttpRequest &r
 	std::string parent_dir = (par_dir_pos == std::string::npos) ? "./" : url_path.substr(0, par_dir_pos);
 	if (parent_dir.empty()) parent_dir = "/";
 
-	if (stat(parent_dir.c_str(), &info) != 0)
+	if (stat(parent_dir.c_str(), &info) != 0) {
 		return 404;
+	}
 	if (!S_ISDIR(info.st_mode))
 		return 409; // is not a dir
 	if (!(info.st_mode & S_IWUSR))
 		return 403; // no write permision
 
-	if (stat(url_path.c_str(), &info) == 0) {
+	if (stat(req_path.c_str(), &info) == 0) {
 		if (S_ISDIR(info.st_mode))
 			return 409;
 		
@@ -185,9 +186,11 @@ int	RequestHandler::uploadFile(const HttpRequest &req, const std::string &file_p
 	if (!file.is_open())
 		return 500;
 
-	while (file.good()) {
+	if (file.good()) {
 		file.write(req.getBody().c_str(), req.getBody().size());
 	}
+	else
+		return 500;
 	return 201;
 }
 
@@ -213,24 +216,24 @@ RequestHandler::getExtensionFromMime(const std::string &mime_type) const{
 	return ".bin";
 }
 
-std::string RequestHandler::manageFileExtension(const HttpRequest &req) const{
-	size_t extension_pos = req.getPath().rfind('.');
+std::string RequestHandler::manageFileExtension(const HttpRequest &req, const std::string &phys_path) const{
+	size_t extension_pos = phys_path.rfind('.');
 
 	if (extension_pos != std::string::npos)
-		return req.getPath();
+		return phys_path;
 
 	std::string con_type_exten = req.getHeader("content-type");
 
 	if (con_type_exten.empty())
-		return req.getPath() + getExtensionFromMime(con_type_exten);
+		return phys_path + getExtensionFromMime(con_type_exten);
 
-	return req.getPath() + ".bin";
+	return phys_path + ".bin";
 }
 
 void 
 RequestHandler::putBinary(const HttpRequest &req, int client_fd, const ResolvedAction &action) const{
-	const std::string &url_path = manageFileExtension(req);
-	int status_code = executePut(url_path, req);
+	const std::string &url_path = manageFileExtension(req, action.target_path);
+	int status_code = executePut(url_path, req, action.target_path);
 	
 	ResponseState resp(status_code);
 

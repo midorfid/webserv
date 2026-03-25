@@ -63,6 +63,8 @@ Response::getStatusText(int code) {
 	case 413: return "Payload Too Large";
 	case 414: return "URl Too Long";
 	case 301: return "Moved Permanently";
+	case 201: return "Created";
+	case 204: return "No Content";
 	default: return "Error";
 	}
 }

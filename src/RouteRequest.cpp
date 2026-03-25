@@ -171,7 +171,7 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	return action; 
 }
 
-std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st) {
+std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st, ActionType at) {
 	std::string full_path; // query?? TODO
 	if (reqPath.find(root_path) != std::string::npos) {
 		full_path = reqPath;
@@ -181,8 +181,8 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 			root_path.erase(--root_path.end());
 		full_path = root_path + reqPath;
 	}
-	std::cout << full_path << std::endl;
-	if (stat(full_path.c_str(), st) != 0) {
+	std::cout << "full_path:" << full_path << std::endl;
+	if (at != ACTION_UPLOAD_FILE && stat(full_path.c_str(), st) != 0) {
 		logTime(ERRLOG);
 		std::cerr << "RouteRequest::catPathes() stat() failed :(" << std::endl;
 	}
@@ -197,7 +197,7 @@ ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &
 		if (serv_cfg.getDirective("root", root_path) == false)
 			return resolveErrorAction(500, serv_cfg, action);
 	}
-	const std::string &full_path = catPathes(req.getPath(), root_path, &action.st);
+	const std::string &full_path = catPathes(req.getPath(), root_path, &action.st, action.type);
 	
 	if (loc.isCgiRequest(full_path)) {
 		return resolveCgiScript(serv_cfg, req, full_path, action);

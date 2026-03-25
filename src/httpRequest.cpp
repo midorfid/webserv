@@ -25,6 +25,7 @@ void	HttpRequest::setMethod(const std::string &method) { this->_method = method;
 void	HttpRequest::setVersion(const std::string &version) { this->_http_ver = version;}
 void	HttpRequest::setQuery(const std::string &query) { this->_query_str = query;}
 void	HttpRequest::setBody(const std::string &body) { this->_body = body;}
+void	HttpRequest::appendBody(const std::string &extra_body) { this->_body += extra_body;}
 void	HttpRequest::addHeader(const std::string &key, const std::string &value) {
 	std::map<std::string, std::string>::const_iterator	it;
 
@@ -62,5 +63,7 @@ HttpRequest::headers() const {
 
 bool
 HttpRequest::isKeepAlive() const {
-	return getHeader("connection") == "keep-alive" ? true : false; // I do tolower, don't I
+	const std::string &keep_alive_header = getHeader("connection");
+	
+	return  (keep_alive_header == "keep-alive" || keep_alive_header == "") ? true : false; // I do tolower, don't I
 }

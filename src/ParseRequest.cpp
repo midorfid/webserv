@@ -75,12 +75,12 @@ bool	ParseRequest::hasUnderscore(const std::string &s) const {
 }
 
 void		ParseRequest::parseHeaders(std::string &request, HttpRequest &req) {
-	std::string		header_line;
+	std::string		header_line = "";
 	std::string		key;
 	std::string		value;
 	size_t			delim_pos;
 
-	while(!request.empty()) {
+	while(header_line == "\r\n\r\n" || !request.empty()) {
 		header_line = getNextLine(request);
 		if (header_line == EOL)
 			break;
@@ -124,10 +124,13 @@ ParseResult	ParseRequest::parseBody(std::string &reqOnlyBody, HttpRequest &req) 
 	size_t	body_size = 0;
 	try
 	{
-		body_size = std::atoi(req.getHeader("content-length").c_str());
+		body_size = std::strtoul(req.getHeader("content-length").c_str(), NULL, 10);
 	}
 	catch(const std::exception& e){}
-	if (body_size > 0 && reqOnlyBody.size() < body_size) {
+	if (reqOnlyBody.empty())
+		return NothingToRead;
+	if (body_size > 0 && reqOnlyBody.length() < body_size - req.getBody().length()) {
+		req.appendBody(reqOnlyBody);
 		return 	RequestIncomplete;
 	}
 	req.setBody(reqOnlyBody);

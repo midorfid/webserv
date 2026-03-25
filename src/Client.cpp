@@ -36,6 +36,10 @@ Client::req() const {
     return _req;
 }
 
+void
+Client::updateLastActivity() {
+	_last_activity = time(NULL);
+}
 
 ParseResult
 Client::processNewData(Server &server) {
@@ -46,6 +50,7 @@ Client::processNewData(Server &server) {
 	if (bytes_read > 0) {
 		if (getClientState() == IDLE) {
 			_state = READING_HEADERS;
+			updateLastActivity();
 			_req_start_time = time(NULL);
 		}
 		_request_buffer.reserve(sizeof(temp_buf));
@@ -68,22 +73,29 @@ Client::processNewData(Server &server) {
 				if (!len_str.empty()) {
 					int len = std::strtoul(len_str.c_str(), NULL, 10);
 					int max_body_size = server.getConfig().getMaxBodySize();
-					std::cout << "actual len:" << len << " max_body_size:" << max_body_size << std::endl;
 					if (len > max_body_size)
 						return BodyTooLarge;
 				}
 				if (_req.getHeader("connection") == "close")
 					_last_activity = 0;
 
+				updateLastActivity();
 				_state = READING_BODY;
-			
-				_request_buffer.erase(0, endofheaders + 4);
+				endofheaders = _request_buffer.find("\r\n\r\n");
+				
+				_request_buffer.erase(0, endofheaders + 1);
 			}
 		}
 		if (getClientState() == READING_BODY) {
-			if (_parser.parseBody(_request_buffer, _req) == RequestComplete) {
-				_state = WRITING_RESPONSE;
-				return RequestComplete;
+			ParseResult status = _parser.parseBody(_request_buffer, _req);
+			if (status == NothingToRead)
+				return NothingToRead;
+			else {
+				updateLastActivity();
+				if (status == RequestComplete) {
+					_state = WRITING_RESPONSE;
+					return RequestComplete;
+				}
 			}
 			return RequestIncomplete;
 		}
