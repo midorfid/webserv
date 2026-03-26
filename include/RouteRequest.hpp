@@ -25,7 +25,6 @@ struct ResolvedAction {
 	std::string			target_path;
 	std::string			req_path; // for no slash redirect
 	int					status_code;
-	struct stat 		st;
 	std::pair<int,int>	cgi_fds;
 };
 
@@ -36,7 +35,7 @@ class RouteRequest {
 
 	private:
 
-		std::string			catPathes(const std::string &reqPath, std::string &root_path, struct stat *st, ActionType at);
+		std::string			catPathes(const std::string &reqPath, std::string &root_path, ActionType at);
 		ResolvedAction		resolveRedirect(const std::string &dir_path, ResolvedAction &action, int status_code = 301);
 		bool				NoSlash(const std::string &str);
 		ResolvedAction		PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, ResolvedAction &action);

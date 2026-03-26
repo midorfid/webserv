@@ -44,4 +44,7 @@ class RequestHandler {
 
 		std::string				getParentDir(const std::string &child_url) const;			
 		std::string				getExtensionFromMime(const std::string &mime_type) const;
+
+		off_t					calculateTargetSize(const std::string &target_path) const;
+
 };

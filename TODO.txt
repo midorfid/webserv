@@ -1,7 +1,3 @@
-WIP DELETE method
-
-reconsider stat field in the action, isn't it useless?
-
 //TODO add client state and implement it into checkTimeouts() for the CGI scripts
 
 //TODO WIP -> move request path normalization to parser from the handler. -> 
@@ -56,3 +52,5 @@ CGI
 5. set environment variables and run execve()
 6. run open() with "xb" flags
 7. for now create files in the static ./images/ dir
+
+make cleanup as well as logs look pretty (remove unnecessary std::couts)

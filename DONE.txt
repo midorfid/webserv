@@ -18,3 +18,6 @@ implement 3 defense layers:
 
 //DONE ParseRequest, potentially change to ParseConfig tokenization.
 
+//DONE DELETE method (basic)
+
+removed stat as a field from the ResolvedAction, it's almost never used and design itself is rather clunky

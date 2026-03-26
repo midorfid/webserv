@@ -59,8 +59,16 @@ void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path)
 	}
 }
 
+off_t
+RequestHandler::calculateTargetSize(const std::string &target_path) const{
+	struct stat	info;
+
+	stat(target_path.c_str(), &info);
+	return info.st_size;
+}
+
 void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) const{
-	long int file_size = action.st.st_size;
+	long int file_size = calculateTargetSize(action.target_path);
 	
 	ResponseState res(action.status_code);
 	
@@ -146,7 +154,7 @@ std::string		RequestHandler::generatePage(int error_code, const std::string &tex
 }
 
 void			RequestHandler::sendDir(const ResolvedAction &action, int client_fd, const std::string &logic_path) const{
-	long int dir_size = action.st.st_size;
+	long int dir_size = calculateTargetSize(action.target_path);
 
 	ResponseState state = createDirListHtml(action.target_path, logic_path);
 	
@@ -307,7 +315,9 @@ RequestHandler::deleteFileElseError(const ResolvedAction &action) const{
 	std::string		par_dir;
 	struct stat		info;
 
-	if (S_ISDIR(action.st.st_mode))
+	if (stat(action.target_path.c_str(), &info) != 0)
+		return 404;
+	if (S_ISDIR(info.st_mode))
 		return 403;
 	if (access(action.target_path.c_str(), W_OK | X_OK) != 0)
 		return 403;

@@ -38,7 +38,6 @@ ResolvedAction	RouteRequest::resolveErrorAction(int error_code, const Config &se
 		struct stat st;
 		if (stat(file_path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
 			
-			action.st = st;
 			action.status_code = error_code;
 			action.target_path = file_path;
 			action.type = ACTION_SERVE_FILE;
@@ -68,7 +67,6 @@ bool	RouteRequest::findAccessibleIndex(ResolvedAction &action, const std::string
 		struct stat st;
 
 		if (stat(full_path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
-			action.st = st;
 			action.status_code = 200;
 			action.target_path = full_path;
 			action.type = ACTION_SERVE_FILE;
@@ -127,9 +125,11 @@ RouteRequest::resolveDeleteAction(const std::string &path, ResolvedAction &actio
 }
 
 ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location, ResolvedAction &action) {
+	struct stat info;
+	
 	if (action.type == ACTION_UPLOAD_FILE)
 		return resolvePutUpload(path, action);
-	if (stat(path.c_str(), &action.st) != 0) {
+	if (stat(path.c_str(), &info) != 0) {
 		switch(errno) {
 			case ENOENT:
 				return resolveErrorAction(404, cfg, action);
@@ -141,10 +141,10 @@ ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config 
 	}
 	if (action.type == ACTION_DELETE_FILE)
 		return resolveDeleteAction(path, action);
-	if (S_ISDIR((&action.st)->st_mode)) {
+	if (S_ISDIR((&info)->st_mode)) {
 		return resolveDirAction(path, cfg, location, action);
 	}
-	else if (S_ISREG((&action.st)->st_mode))
+	else if (S_ISREG((&info)->st_mode))
 		return resolveFileAction(path, action);
 	//Fallback
 	return resolveErrorAction(403, cfg, action);
@@ -189,8 +189,10 @@ RouteRequest::setActionType(ResolvedAction &action, const std::string &met) {
 		action.type = ACTION_DELETE_FILE;
 }
 
-std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, struct stat *st, ActionType at) {
-	std::string full_path; // query?? TODO
+std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, ActionType at) {
+	std::string		full_path; // query?? TODO
+	struct stat		info;
+
 	if (reqPath.find(root_path) != std::string::npos) {
 		full_path = reqPath;
 	}
@@ -200,7 +202,7 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 		full_path = root_path + reqPath;
 	}
 	std::cout << "full_path:" << full_path << std::endl;
-	if (at != ACTION_UPLOAD_FILE && stat(full_path.c_str(), st) != 0) {
+	if (at != ACTION_UPLOAD_FILE && stat(full_path.c_str(), &info) != 0) {
 		logTime(ERRLOG);
 		std::cerr << "RouteRequest::catPathes() stat() failed :(" << std::endl;
 	}
@@ -215,7 +217,7 @@ ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &
 		if (serv_cfg.getDirective("root", root_path) == false)
 			return resolveErrorAction(500, serv_cfg, action);
 	}
-	const std::string &full_path = catPathes(req.getPath(), root_path, &action.st, action.type);
+	const std::string &full_path = catPathes(req.getPath(), root_path, action.type);
 	
 	if (loc.isCgiRequest(full_path)) {
 		return resolveCgiScript(serv_cfg, req, full_path, action);
