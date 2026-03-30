@@ -33,10 +33,15 @@ class ParseRequest {
 		std::string						getNextLine(std::string &request);
 		std::vector<std::string>    	tokenizeFirstLine(const std::string &first_line);
 		ParseResult						parseFirstLine(std::string &_current_line, HttpRequest &req);
+
 		template <typename T>
 		std::string						trimToken(std::string &src, T token);
+		
 		void							trimLeftWhitespace(std::string &to_trim);
 		
+		template <typename T>
+		std::string						trimPathRetQuery(std::string &pathAndQuery, T token);
+
 		void							parseMethod(std::string &first_line, HttpRequest &req);
 		void							parsePathAndQuery(std::string &line_remainder, HttpRequest &req);
 		void							parseHttpVer(std::string &line_remainder, HttpRequest &req);

@@ -30,6 +30,21 @@ std::string		ParseRequest::trimToken(std::string &src, T token) {
 	return src;
 }
 
+template <typename T>
+std::string		ParseRequest::trimPathRetQuery(std::string &pathAndQuery, T token) {
+	size_t			ele_pos;
+	std::string		res = "";
+
+	ele_pos = pathAndQuery.find(token);
+
+	if (ele_pos != pathAndQuery.npos) {
+		res = pathAndQuery.substr(ele_pos + 1);
+		pathAndQuery.erase(ele_pos);
+	}
+	return res;
+}
+
+
 std::vector<std::string>    ParseRequest::tokenizeFirstLine(const std::string &first_line) {
 	std::vector<std::string>    tokens;
 	std::string                 token;
@@ -48,17 +63,13 @@ void		ParseRequest::parseMethod(std::string &method, HttpRequest &req) {
 }
 
 void		ParseRequest::parsePathAndQuery(std::string &pathAndQuery, HttpRequest &req) {
-	std::string		_substring;
+	std::string		query;
 
-	_substring = trimToken(pathAndQuery, '?');
-	if (_substring != pathAndQuery) {
-		req.setPath(_substring);
-		req.setQuery(pathAndQuery.substr(_substring.length()));
-	}
-	else {
-		req.setPath(pathAndQuery);
-		req.setQuery("");
-	}
+	query = trimPathRetQuery(pathAndQuery, '?');
+	std::cout << "path:" << pathAndQuery << std::endl;
+	std::cout << "query:" << query << std::endl;
+	req.setPath(pathAndQuery);
+	req.setQuery(query);
 }
 
 

@@ -21,3 +21,5 @@ implement 3 defense layers:
 //DONE DELETE method (basic)
 
 removed stat as a field from the ResolvedAction, it's almost never used and design itself is rather clunky
+
+//DONE properly serve static pages for the regular requests strip queries 
