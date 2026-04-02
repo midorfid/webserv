@@ -28,6 +28,7 @@ class CgiInfo {
         void    addFds(const ResolvedAction &action) {
             _read_fd = action.cgi_fds.first;
             _write_fd = action.cgi_fds.second;
+            _is_cgi = true;
         }
 
         bool            isCgi() const {return _is_cgi;}

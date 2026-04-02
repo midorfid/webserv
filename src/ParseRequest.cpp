@@ -66,7 +66,6 @@ void		ParseRequest::parsePathAndQuery(std::string &pathAndQuery, HttpRequest &re
 	std::string		query;
 
 	query = trimPathRetQuery(pathAndQuery, '?');
-	std::cout << "path:" << pathAndQuery << std::endl;
 	std::cout << "query:" << query << std::endl;
 	req.setPath(pathAndQuery);
 	req.setQuery(query);

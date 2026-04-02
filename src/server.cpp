@@ -402,15 +402,17 @@ Server::getClientAddr(struct sockaddr_storage &client_addr) {
 void
 Server::handleDefault(Client &client, int client_fd) {
 	ResolvedAction action = _route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip());
-
+	std::cout << "asd" << std::endl;
 	_handler.handle(client.req(), client_fd, client.cgi_state(), action);
 
 	client.updateLastActivity();
 
 	const CgiInfo &cgi = client.cgi_state();
+	std::cout << "asd2" << std::endl;
 
 	if (cgi.isCgi()) {
 		epoll_add_cgi(std::make_pair(cgi.getReadfd(), cgi.getWritefd()), client_fd);
+		std::cout << "asd3" << std::endl;
 	}
 	disconnect_ifNoKeepAlive(client, client_fd);
 }

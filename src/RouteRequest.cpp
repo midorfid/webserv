@@ -51,11 +51,10 @@ ResolvedAction	RouteRequest::resolveErrorAction(int error_code, const Config &se
 	return action;
 }
 
-ResolvedAction RouteRequest::resolveFileAction(const std::string &path, ResolvedAction &action) {
+ResolvedAction RouteRequest::resolveFileAction(ResolvedAction &action) {
 
 	action.status_code = 200;
 	action.type = ACTION_SERVE_FILE;
-	action.target_path = path;
 
 	return action;
 }
@@ -111,25 +110,21 @@ ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const
 }
 
 ResolvedAction
-RouteRequest::resolvePutUpload(const std::string &path, ResolvedAction &action) {
-	action.target_path = path;
-	
+RouteRequest::resolvePutUpload(ResolvedAction &action) {
 	return action;
 }
 
 ResolvedAction
-RouteRequest::resolveDeleteAction(const std::string &path, ResolvedAction &action) {
-	action.target_path = path;
-	
+RouteRequest::resolveDeleteAction(ResolvedAction &action) {
 	return action;
 }
 
-ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config &cfg, const Location *location, ResolvedAction &action) {
+ResolvedAction	RouteRequest::checkReqPath(const Config &cfg, const Location *location, ResolvedAction &action) {
 	struct stat info;
 	
 	if (action.type == ACTION_UPLOAD_FILE)
-		return resolvePutUpload(path, action);
-	if (stat(path.c_str(), &info) != 0) {
+		return resolvePutUpload(action);
+	if (stat(action.target_path.c_str(), &info) != 0) {
 		switch(errno) {
 			case ENOENT:
 				return resolveErrorAction(404, cfg, action);
@@ -140,12 +135,12 @@ ResolvedAction	RouteRequest::checkReqPath(const std::string &path, const Config 
 		}
 	}
 	if (action.type == ACTION_DELETE_FILE)
-		return resolveDeleteAction(path, action);
+		return resolveDeleteAction(action);
 	if (S_ISDIR((&info)->st_mode)) {
-		return resolveDirAction(path, cfg, location, action);
+		return resolveDirAction(action.target_path, cfg, location, action);
 	}
 	else if (S_ISREG((&info)->st_mode))
-		return resolveFileAction(path, action);
+		return resolveFileAction(action);
 	//Fallback
 	return resolveErrorAction(403, cfg, action);
 }
@@ -201,7 +196,6 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 			root_path.erase(--root_path.end());
 		full_path = root_path + reqPath;
 	}
-	std::cout << "full_path:" << full_path << std::endl;
 	if (at != ACTION_UPLOAD_FILE && stat(full_path.c_str(), &info) != 0) {
 		logTime(ERRLOG);
 		std::cerr << "RouteRequest::catPathes() stat() failed :(" << std::endl;
@@ -217,17 +211,17 @@ ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &
 		if (serv_cfg.getDirective("root", root_path) == false)
 			return resolveErrorAction(500, serv_cfg, action);
 	}
-	const std::string &full_path = catPathes(req.getPath(), root_path, action.type);
+	action.target_path = catPathes(req.getPath(), root_path, action.type);
 	
-	if (loc.isCgiRequest(full_path)) {
-		return resolveCgiScript(serv_cfg, req, full_path, action);
+	if (loc.isCgiRequest(action.target_path)) {
+		return resolveCgiScript(serv_cfg, req, loc, action);
 	}
 
-	return checkReqPath(full_path, serv_cfg, &loc, action);
+	return checkReqPath(serv_cfg, &loc, action);
 }
 
 ResolvedAction
-RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, ResolvedAction &action) {
+RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const Location &loc, ResolvedAction &action) {
 	pid_t	cpid;
 	int		serv_to_cgi[2];
 	int		cgi_to_serv[2];
@@ -261,16 +255,15 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 		close(cgi_to_serv[1]);
 		close(serv_to_cgi[0]);
 
-		Environment	envp_builder(req);
+		Environment	envp_builder(req, loc);
 
-		envp_builder.build();
+		envp_builder.build(action.target_path);
 
 		char *intep = const_cast<char*>("/usr/bin/python3"); // TODO hardcoded change!
-		char *program = const_cast<char*>("../www/script.py");
+		char *program = const_cast<char*>("./www/script.py");
 
 		char *const argv[] = {intep, program, NULL};
 		logTime(REGLOG);
-		std::cerr << "script path: " << full_path << std::endl;
 		if (execve(program, argv, envp_builder.getEnvp()) == -1) {
 			logTime(ERRLOG);
 			std::cerr << "execve error" << std::endl;
@@ -289,10 +282,8 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 				resolveErrorAction(500, serv_cfg, action);
 		}
 		
-		
 		action.type = ACTION_CGI;
 		action.status_code = 200;
-		action.target_path = full_path;
 		action.cgi_fds.first = cgi_to_serv[0];
 		action.cgi_fds.second = serv_to_cgi[1];
 

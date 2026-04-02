@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include "Location.hpp"
 
 class Server;
 class HttpRequest;
@@ -10,13 +11,13 @@ class HttpRequest;
 class Environment {
     public:
 
-        Environment(const HttpRequest &req);
+        Environment(const HttpRequest &req, const Location &loc);
         ~Environment();
 
         Environment &operator=(const Environment &other);
         Environment(const Environment &other);
 
-        void build();
+        void build(const std::string &target_path);
   
         char * const*   getEnvp() const;
 
@@ -32,7 +33,7 @@ class Environment {
         friend int main(int, char **, char **);
 
         const HttpRequest           &_req;
-        // const Location				&_loc;
+        const Location				&_loc;
         std::vector<std::string>    _vsenv;
         char                        **_cenv;
 

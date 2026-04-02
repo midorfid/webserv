@@ -9,9 +9,9 @@
 size_t Environment::_parent_env_size = 0;
 char **Environment::_parent_env = NULL;
 
-Environment::Environment(const HttpRequest &req) :
+Environment::Environment(const HttpRequest &req, const Location &loc) :
     _req(req),
-    // _loc(loc),
+    _loc(loc),
     _cenv(NULL) {}
 
 Environment::~Environment() {
@@ -20,7 +20,7 @@ Environment::~Environment() {
 
 Environment::Environment(const Environment &other) :
     _req(other._req),
-    // _loc(other._loc),
+    _loc(other._loc),
     _cenv(NULL) // shallow copy
 { *this = other; }
 
@@ -33,22 +33,26 @@ Environment::operator=(const Environment &other) {
 }
 
 void
-Environment::build() {
+Environment::build(const std::string &target_path) {
     _vsenv.reserve(dfl_size + _req.headers().size());
 
     append("REQUEST_METHOD", _req.getMethod());
-    // if (req.getQuery().size()) TODO: PATH_INFO and PATH_TRANSLATED
+    if (_req.getQuery().size())
+        append("PATH_INFO", _req.getPath() + _req.getQuery());
+    else
+        append("PATH_INFO", _req.getPath());
+    append("PATH_TRANSLATED", target_path);
     append("REQUEST_PATH", _req.getPath());
     append("REQUEST_QUERY", _req.getQuery());
     append("SERVER_PROTOCOL", _req.getVersion());
     // append("SCRIPT_NAME", _loc.) // redirect?
 
-    // try {
-    //    append("CONTENT_TYPE", _req.getHeader("content-type"));
-    // } catch (std::out_of_range &) {}
-    // try {
-    //    append("CONTENT_LENGTH", _req.getHeader("content-length"));
-    // } catch (std::out_of_range &) {}
+    try {
+       append("CONTENT_TYPE", _req.getHeader("content-type"));
+    } catch (std::out_of_range &) {}
+    try {
+       append("CONTENT_LENGTH", _req.getHeader("content-length"));
+    } catch (std::out_of_range &) {}
 
     append(_req.headers());
 

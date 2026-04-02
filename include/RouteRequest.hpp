@@ -43,15 +43,15 @@ class RouteRequest {
         const Location      *findBestLocationMatch(const Config &serv_cfg, const std::string &url);
         std::string			handlePath(const Config &serv_cfg, HttpRequest &req);
 		ResolvedAction		resolveErrorAction(int error_code, const Config &serv_cfg, ResolvedAction &action);
-		ResolvedAction		resolveFileAction(const std::string &path, ResolvedAction &action);
+		ResolvedAction		resolveFileAction(ResolvedAction &action);
 		ResolvedAction		resolveDirAction(const std::string &path, const Config &cfg,
 								const Location *location, ResolvedAction &action);
-		ResolvedAction		resolvePutUpload(const std::string &path, ResolvedAction &action);
+		ResolvedAction		resolvePutUpload(ResolvedAction &action);
 		bool				findAccessibleIndex(ResolvedAction &action, const std::string &dir_path,
 								const std::vector<std::string> &indexes);
-        ResolvedAction      checkReqPath(const std::string &path, const Config &cfg, const Location *location, ResolvedAction &action);
-        ResolvedAction      resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const std::string &full_path, ResolvedAction &action);
+        ResolvedAction      checkReqPath(const Config &cfg, const Location *location, ResolvedAction &action);
+        ResolvedAction      resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const Location &loc, ResolvedAction &action);
 		void				setActionType(ResolvedAction &action, const std::string &met);
-		ResolvedAction		resolveDeleteAction(const std::string &path, ResolvedAction &action);
+		ResolvedAction		resolveDeleteAction(ResolvedAction &action);
 		
 };
