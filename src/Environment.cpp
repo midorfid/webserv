@@ -46,11 +46,12 @@ Environment::build(const std::string &target_path) {
     append("REQUEST_QUERY", _req.getQuery());
     append("SERVER_PROTOCOL", _req.getVersion());
     // append("SCRIPT_NAME", _loc.) // redirect?
-
+    std::cout << "yoyoyoyo" << std::endl;
     try {
        append("CONTENT_TYPE", _req.getHeader("content-type"));
     } catch (std::out_of_range &) {}
     try {
+        std::cout << "content-lenght:" << _req.getHeader("content-length") << std::endl;
        append("CONTENT_LENGTH", _req.getHeader("content-length"));
     } catch (std::out_of_range &) {}
 

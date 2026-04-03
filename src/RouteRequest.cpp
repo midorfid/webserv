@@ -260,7 +260,7 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 		envp_builder.build(action.target_path);
 
 		char *intep = const_cast<char*>("/usr/bin/python3"); // TODO hardcoded change!
-		char *program = const_cast<char*>("./www/script.py");
+		char *program = const_cast<char*>("./www/CgiPostHandler.py");
 
 		char *const argv[] = {intep, program, NULL};
 		logTime(REGLOG);

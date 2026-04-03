@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import os
 import sys
 import urllib.parse
@@ -58,5 +59,6 @@ class CGIHandler:
 
 
 if __name__ == "__main__":
+    print("HTTP/1.1 201 OK", end="\r\n")
     handler = CGIHandler()
     handler.process()

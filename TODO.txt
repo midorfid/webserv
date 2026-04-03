@@ -1,3 +1,9 @@
+//TODO cgi write to pipe doesn't write body
+cgit read should read until 0 in a loop
+resolveCgiScript should return on error
+script header typos
+
+
 
 //TODO add client state and implement it into checkTimeouts() for the CGI scripts
 
