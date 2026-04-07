@@ -48,17 +48,16 @@ class CGIHandler:
             return self.sendResponse("405 Method Not Allowed", "Use POST")    
         if self.mime_type == "application/octet-stream":
             if self.handle_bin_stream():
-                return self.sendResponse("200 OK", "Binary File Stored")
+                return self.sendResponse("201 OK", "Binary File Stored")
             else:
                 return self.sendResponse("500 Internal Error", "Disk Write Failed")
         elif self.mime_type == "application/x-www-form-urlencoded":
             data = self.handle_form_data()
-            return self.sendResponse("200 OK", f"Parsed Keys: {list(data.keys())}")
+            return self.sendResponse("201 OK", f"Parsed Keys: {list(data.keys())}")
         else:
             self.sendResponse("415 Unsupported Media Type")
 
 
 if __name__ == "__main__":
-    print("HTTP/1.1 201 OK", end="\r\n")
     handler = CGIHandler()
     handler.process()

@@ -19,7 +19,7 @@ def body():
 	return body
 
 payload = body()
-print("HTTP/1.1 200 OK", end="\r\n")
+print("Status: 200 OK", end="\r\n")
 print("Content-Type: text/html", end="\r\n")
 print("Content-Length:", len(payload), end="\r\n")
 print("", end="\r\n")

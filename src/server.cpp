@@ -141,48 +141,112 @@ void	Server::init_epoll(epoll_event *ev) {
 		exit(EXIT_FAILURE);
 	}
 }
+
+void
+Server::disconnectCgiFds(Client &client) {
+	int &r_fd = client.getCgi_state().getReadfd();
+	int &w_fd = client.getCgi_state().getWritefd();
+
+	if (r_fd != -1) {
+		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, r_fd, NULL);
+		_cgi_client.erase(r_fd);
+		close(r_fd);
+		r_fd = -1;
+	}
+	if (w_fd != -1) {
+		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, w_fd, NULL);
+		_cgi_client.erase(w_fd);
+		close(w_fd);
+		w_fd = -1;
+	}
+}
+
 void 
 Server::handle_cgi_write(int write_fd) {
-	// int &client_fd = _cgi_client[write_fd];
+	const int	&client_fd = _cgi_client[write_fd];
+	Client		&client = clients[client_fd]; 
+	std::string &body = client.req().getBody();
+	int			remaining;
+	
 	logTime(REGLOG);
 	std::cout << "cgi write_fd:" << write_fd << std::endl;
 
-	epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, write_fd, NULL);
-	_cgi_client.erase(write_fd);
+	remaining = body.length() - client.bytes_written_to_cgi;
+	ssize_t sent = write(write_fd, body.c_str() + client.bytes_written_to_cgi, remaining);
+	if (sent > 0) {
+		client.bytes_written_to_cgi += sent;
+		if (body.length() == client.bytes_written_to_cgi) {
+			close(write_fd);
+			epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, NULL);
+		}
+	}
+	else if (sent == -1) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			// pipe full
+			return;
+		}
+		else {
+			disconnectCgiFds(client);
+			terminateConnWithError(client_fd, 500);
+		}
+	}
 }
+
 void
-Server::handle_cgi_read(int read_fd) {
-	int &client_fd = _cgi_client[read_fd];
+Server::parseAndQoutputBuf(int client_fd) {
+	std::string			&out_buf = _clients[client_fd].getCgi_state().output_buf;
 	
-	logTime(REGLOG);
-	std::cout << "cgi read_fd:" << read_fd << std::endl;
-	char buf[4096];
-	ssize_t bytes_read = read(read_fd, buf, 4096);
-	logTime(REGLOG);
-	std::cout << "bytes read: " << bytes_read << std::endl;
-	if (bytes_read == -1) {
-		logTime(ERRLOG);
-		std::cerr << "read in cgi failed.\n";
+	size_t head_end_pos = out_buf.find("\r\n\r\n");
+
+	size_t status = out_buf.find("Status:");
+	if (status != npos) {
+		
 	}
 	else {
-		ssize_t total_sent;
+		// add default 200 OK
+	}
+	if (out_buf.find("Content-Length:") == npos) {}
 
-		total_sent = 0;
-		logTime(REGLOG);
-		std::cout << "client fd: " << client_fd << std::endl;
-		while (total_sent < bytes_read) {
-			ssize_t sent = send(client_fd, buf + total_sent, bytes_read - total_sent, 0);
-			if (sent == -1) {
-				throw std::runtime_error("Error sending response");
-			}
-			total_sent += sent;
-		}
-		logTime(REGLOG);
-		std::cout << "bytes sent: " << total_sent << std::endl;
+	//queue
+	struct epoll_event	*ev;
+	ev.events = EPOLLOUT;
+	epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, ev);
 
-		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
+}
+
+void
+Server::handle_cgi_read(int &read_fd) {
+	int				&client_fd = _cgi_client[read_fd];
+	std::string		&out_buf = _clients[client_fd].getCgi_state().output_buf;
+
+	logTime(REGLOG);
+	std::cout << "cgi read_fd:" << read_fd << std::endl;
+	
+	char buf[4096];
+	ssize_t bytes_read = read(read_fd, buf, 4096);
+	
+	logTime(REGLOG);
+	std::cout << "bytes read: " << bytes_read << std::endl;
+	if (bytes_read > 0) {
+		out_buf.append(buf, bytes_read);
+	}
+	else if (bytes_read == 0) {
+		close(read_fd);
 		_cgi_client.erase(read_fd);
-		// disconnect_client(client_fd);
+		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
+		read_fd = -1;
+
+		parseAndQoutputBuf(client_fd);
+	}
+	else /*(bytes_read == -1)*/ {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			// pipe full
+			return;
+		}
+		else {
+			disconnectCgiFds(client);
+			terminateConnWithError(client_fd, 500);
+		}
 	}
 }
 
@@ -402,17 +466,14 @@ Server::getClientAddr(struct sockaddr_storage &client_addr) {
 void
 Server::handleDefault(Client &client, int client_fd) {
 	ResolvedAction action = _route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip());
-	std::cout << "asd" << std::endl;
 	_handler.handle(client.req(), client_fd, client.cgi_state(), action);
 
 	client.updateLastActivity();
 
 	const CgiInfo &cgi = client.cgi_state();
-	std::cout << "asd2" << std::endl;
 
 	if (cgi.isCgi()) {
 		epoll_add_cgi(std::make_pair(cgi.getReadfd(), cgi.getWritefd()), client_fd);
-		std::cout << "asd3" << std::endl;
 	}
 	disconnect_ifNoKeepAlive(client, client_fd);
 }

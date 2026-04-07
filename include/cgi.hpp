@@ -2,37 +2,25 @@
 
 #include "RouteRequest.hpp"
 
-class CgiInfo {
-    private:
-        bool            _is_cgi;
-        int             _write_fd;
-        int             _read_fd;
-        std::string     _write_buf;
+struct CgiInfo {
+    int             write_fd;
+    int             read_fd;
     
-    public:
-        CgiInfo() : _is_cgi(false) {}
-        CgiInfo(bool allowed) : _is_cgi(allowed) {}
-        ~CgiInfo() {}
+    pid_t           child_pid;
+    
+    std::string     output_buf;
+    
+    CgiInfo() { reset(); }
 
-        CgiInfo(const CgiInfo &other) : _is_cgi(other._is_cgi), _write_fd(other._write_fd), _read_fd(other._read_fd), _write_buf(other._write_buf) {}
-        CgiInfo &operator=(const CgiInfo &other) {
-            if (&other != this) {
-                _is_cgi = other._is_cgi;
-                _write_fd = other._write_fd;
-                _read_fd = other._read_fd;
-                _write_buf = other._write_buf;
-            }
-            return *this;
-        }
+    void    addFds(const ResolvedAction &action) {
+        read_fd = action.cgi_fds.first;
+        write_fd = action.cgi_fds.second;
+    }
 
-        void    addFds(const ResolvedAction &action) {
-            _read_fd = action.cgi_fds.first;
-            _write_fd = action.cgi_fds.second;
-            _is_cgi = true;
-        }
-
-        bool            isCgi() const {return _is_cgi;}
-        int             getWritefd() const {return _write_fd;}
-        int             getReadfd() const {return _read_fd;}
-        std::string     &getWriteBuf() { return _write_buf;}
+    void    reset() {
+        write_fd = -1;
+        read_fd = -1;
+        child_pid = -1;
+        output_buf.clear();
+    }
 };

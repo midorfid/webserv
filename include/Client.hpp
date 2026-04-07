@@ -39,7 +39,9 @@ class Client {
 	std::string const	&ip() const;
 	std::string const	&port() const;
 	void				reset();
-	CgiInfo				&cgi_state();
+	CgiInfo				&getCgi_state();
+
+	int					bytes_written_to_cgi;
 
 	private:
 	

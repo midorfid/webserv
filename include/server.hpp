@@ -61,4 +61,6 @@ class Server {
         void            handleClientTimeout(int client_fd);
         double          diffTime(const time_t &client_tm);
         void            checkTimeouts();
+        void            disconnectCgiFds(Client &client);
+        void            parseAndQoutputBuf(int client_fd);
 };

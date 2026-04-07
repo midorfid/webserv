@@ -10,7 +10,7 @@
 #define BUF_SIZE 4096
 #define MAX_HEADERS_SIZE 8192
 
-Client::Client() : _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
+Client::Client() : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
 
 Client::~Client() {
 }
@@ -19,7 +19,8 @@ Client::Client(const Client &other) { *this = other; }
 
 Client &Client::operator=(const Client &other) {
     if (this != &other) {
-        this->_request_buffer = other._request_buffer;
+        this->bytes_written_to_cgi = other.bytes_written_to_cgi;
+		this->_request_buffer = other._request_buffer;
         this->_last_activity = other._last_activity;
         this->_parser = other._parser;
         this->_req = other._req;
@@ -139,6 +140,7 @@ Client::reset() {
 	_req_start_time = 0;
 	_cgi_state = CgiInfo(false);
 	_state = IDLE;
+	bytes_written_to_cgi = 0;
 }
 
 bool
@@ -146,7 +148,7 @@ Client::isKeepAliveConn() const {
 	return _last_activity != 0;
 }
 
-Client::Client(std::string &ip, std::string &port, int sock_fd) : _req_start_time(0), _last_activity(time(NULL)), _state(IDLE),
+Client::Client(std::string &ip, std::string &port, int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE),
 		_ip_string(ip), _port(port), _sock_fd(sock_fd), _request_buffer(""), _parser(), _req(), _cgi_state(false) {
 	logTime(REGLOG);
 	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
@@ -155,6 +157,6 @@ Client::Client(std::string &ip, std::string &port, int sock_fd) : _req_start_tim
 Client::Client(int sock_fd) : _sock_fd(sock_fd) {}
 
 CgiInfo &
-Client::cgi_state() {
+Client::getCgi_state() {
 	return _cgi_state;
 }
