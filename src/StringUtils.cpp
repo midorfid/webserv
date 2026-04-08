@@ -1,7 +1,8 @@
 #include "StringUtils.hpp"
 #include <sstream>
 
-std::vector<std::string>    StringUtils::split(const std::string &s, char delimiter) {
+template <>
+std::vector<std::string>    StringUtils::split<char>(const std::string &s, char delimiter) {
     std::vector<std::string>    tokens;
     std::string                 token;
     std::istringstream          tokenStream(s);
@@ -11,6 +12,47 @@ std::vector<std::string>    StringUtils::split(const std::string &s, char delimi
     }
 
     return tokens;
+}
+
+template <>
+std::vector<std::string>    StringUtils::split<std::string>(const std::string &s, std::string delimiter) {
+    std::vector<std::string>    tokens;
+    std::string                 token;
+    std::istringstream          tokenStream(s);
+
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+
+    return tokens;
+}
+
+void		StringUtils::trimLeftWhitespace(std::string &to_trim) {
+	const std::string WHITESPACE = " \r\t\n\f\v";
+	size_t start = to_trim.find_first_not_of(WHITESPACE);
+
+	if (start == to_trim.npos)
+		to_trim.clear();
+	else {
+		to_trim.erase(0, start);
+	}
+}
+
+
+void		StringUtils::trimRightWhitespace(std::string &to_trim) {
+	const std::string WHITESPACE = " \r\t\n\f\v";
+	size_t start = to_trim.find_last_not_of(WHITESPACE);
+
+	if (start == to_trim.npos)
+		to_trim.clear();
+	else {
+		to_trim.erase(start);
+	}
+}
+
+void		StringUtils::trimWhitespaces(std::string &to_trim) {
+	StringUtils::trimLeftWhitespace(to_trim);
+	StringUtils::trimRightWhitespace(to_trim);
 }
 
 std::vector<std::string>    StringUtils::extractSubVecOfStr(const std::vector<std::string> &src) {

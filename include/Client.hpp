@@ -5,6 +5,7 @@
 #include "ParseRequest.hpp"
 #include "cgi.hpp"
 #include <time.h>
+#include "response.hpp"
 
 class Server;
 
@@ -41,8 +42,9 @@ class Client {
 	void				reset();
 	CgiInfo				&getCgi_state();
 
-	int					bytes_written_to_cgi;
-
+	int						bytes_written_to_cgi;
+	ResponseState			resp_state;
+	// create offset var for send
 	private:
 	
 		time_t			_req_start_time;

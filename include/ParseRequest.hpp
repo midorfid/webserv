@@ -37,8 +37,6 @@ class ParseRequest {
 		template <typename T>
 		std::string						trimToken(std::string &src, T token);
 		
-		void							trimLeftWhitespace(std::string &to_trim);
-		
 		template <typename T>
 		std::string						trimPathRetQuery(std::string &pathAndQuery, T token);
 

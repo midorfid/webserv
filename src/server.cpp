@@ -1,3 +1,4 @@
+#include <cctype>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/epoll.h>
@@ -193,20 +194,42 @@ Server::handle_cgi_write(int write_fd) {
 }
 
 void
-Server::parseAndQoutputBuf(int client_fd) {
-	std::string			&out_buf = _clients[client_fd].getCgi_state().output_buf;
-	
-	size_t head_end_pos = out_buf.find("\r\n\r\n");
+Server::parseAndQoutputBuf(Client &client, int client_fd) {
+	std::string			&out_buf = client.getCgi_state().output_buf;
+	ResponseState		&resp = client.resp_state;
 
-	size_t status = out_buf.find("Status:");
-	if (status != npos) {
+	size_t	head_end = out_buf.find("\r\n\r\n");
+	if (head_end == std::string::npos)
+		return;
+
+	std::string headers = out_buf.substr(0, head_end);
+	std::string	body = out_buf.substr(head_end + 4);
 		
-	}
-	else {
-		// add default 200 OK
-	}
-	if (out_buf.find("Content-Length:") == npos) {}
+	size_t	headers_offset = 0;
 
+	while (headers_offset < head_end) {
+		size_t end_line = headers.find("\r\n", headers_offset);
+		if (end_line == std::string::npos || end_line > head_end)
+			break;
+		std::string line = headers.substr(headers_offset, end_line - headers_offset);
+
+		size_t semi_column = line.find(':');
+
+		if (semi_column != std::string::npos) {
+			std::string key = line.substr(0, semi_column);
+			std::string val = line.substr(semi_column + 1);
+
+			StringUtils::trimWhitespaces(key);
+			StringUtils::trimWhitespaces(val);
+
+			for (size_t i = 0; i < key.length(); ++i)
+				key[i] = std::tolower(key[i]);
+
+			resp.addHeader(key, val);
+		}
+		headers_offset = end_line + 2;
+	}
+	Response::finalizeResponse(resp, client.req.getPath(), body.length(), client.isKeepAliveConn());
 	//queue
 	struct epoll_event	*ev;
 	ev.events = EPOLLOUT;
@@ -217,7 +240,8 @@ Server::parseAndQoutputBuf(int client_fd) {
 void
 Server::handle_cgi_read(int &read_fd) {
 	int				&client_fd = _cgi_client[read_fd];
-	std::string		&out_buf = _clients[client_fd].getCgi_state().output_buf;
+	Client			&client = _clients[client_fd];
+	std::string		&out_buf = client.getCgi_state().output_buf;
 
 	logTime(REGLOG);
 	std::cout << "cgi read_fd:" << read_fd << std::endl;
@@ -236,7 +260,7 @@ Server::handle_cgi_read(int &read_fd) {
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
 		read_fd = -1;
 
-		parseAndQoutputBuf(client_fd);
+		parseAndQoutputBuf(client, client_fd);
 	}
 	else /*(bytes_read == -1)*/ {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {

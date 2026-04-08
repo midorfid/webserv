@@ -1,4 +1,5 @@
 #include "ParseRequest.hpp"
+#include "StringUtils.hpp"
 #include <iostream>
 #include <algorithm>
 #include <cctype>
@@ -105,17 +106,6 @@ void		ParseRequest::parseHeaders(std::string &request, HttpRequest &req) {
 		trimLeftWhitespace(key);
 		trimLeftWhitespace(value);
 		req.addHeader(key, value);
-	}
-}
-
-void		ParseRequest::trimLeftWhitespace(std::string &to_trim) {
-	const std::string WHITESPACE = " \r\t\n\f\v";
-	size_t start = to_trim.find_first_not_of(WHITESPACE);
-
-	if (start == to_trim.npos)
-		to_trim.clear();
-	else {
-		to_trim.erase(0, start);
 	}
 }
 

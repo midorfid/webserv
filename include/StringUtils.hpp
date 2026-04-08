@@ -14,7 +14,11 @@ enum HttpMethod {
 
 namespace StringUtils {
 
-    std::vector<std::string>    split(const std::string &s, char delimiter);
+    template <typename T>
+    std::vector<std::string>    split(const std::string &s, T delimiter);
+
+    void		                trimLeftWhitespace(std::string &to_trim);
+
     std::vector<std::string>    extractSubVecOfStr(const std::vector<std::string> &src);
     std::string                 myItoa(int input);
     HttpMethod                  stringToMethod(const std::string &str);
