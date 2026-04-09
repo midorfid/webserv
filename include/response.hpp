@@ -3,18 +3,32 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <unordered_map>
 
 struct ResponseState {
 	int													status_code;
 	std::string											body;
-	std::vector<std::pair<std::string, std::string> >	headers;
+	std::unordered_map<std::string, std::string>		headers;
+	std::vector<std::string>							cookies;
 
 	ResponseState(int status_code) : status_code(status_code) {}
 	ResponseState() {}
 	~ResponseState() {}
 
 	void addHeader(const std::string &key, const std::string &val) {
-		headers.push_back(make_pair(key, val));
+		if (key == "set-cookie") {
+			cookies.push_back(val);
+			return;
+		}
+		if (key == "content-length" || key == "content-type") {
+			headers[key] = val;
+			return;
+		}
+		if (headers.find(key) != headers.end()) {
+			headers[key] += ", " + val;
+		} else {
+			headers[key] = val;
+		}
 	}
 };
 

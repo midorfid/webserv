@@ -231,6 +231,7 @@ Server::parseAndQoutputBuf(Client &client, int client_fd) {
 	}
 	Response::finalizeResponse(resp, client.req.getPath(), body.length(), client.isKeepAliveConn());
 	//queue
+	
 	struct epoll_event	*ev;
 	ev.events = EPOLLOUT;
 	epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, ev);

@@ -2,28 +2,33 @@
 
 void
 Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize, bool isConKeepAlive) {
-	resp.addHeader("Date", Response::getHttpDate());
-	resp.addHeader("Server", "Webserv/ver 1.0");
-	resp.addHeader("Content-Length", std::to_string(bodySize));
+	resp.addHeader("date", Response::getHttpDate());
+	resp.addHeader("server", "Webserv/ver 1.0");
+	resp.addHeader("content-length", std::to_string(bodySize));
 	if (isConKeepAlive)
-		resp.addHeader("Connection", "keep-alive");
+		resp.addHeader("connection", "keep-alive");
 	else
-		resp.addHeader("Connection", "closed");
+		resp.addHeader("connection", "closed");
+	if (resp.cookies.size() > 0) {
+		for (std::vector<std::string>::const_iterator it = resp.cookies.begin(); it != resp.cookies.end(); ++it) {
+			resp.addHeader("set-cookie", *it);
+		}
+	}
     switch(resp.status_code) {
         case 201:
-            resp.addHeader("Location", path);
+            resp.addHeader("location", path);
             break;
         case 301:
         case 302:
         case 307:
         case 308:
-            resp.addHeader("Location", path);
+            resp.addHeader("location", path);
             break;
         case 405:
-            resp.addHeader("Allow", "GET, POST, DELETE"); // TODO hardcoded, also I intend to allow PUT, not sure if the message based on location permission
+            resp.addHeader("allow", "GET, POST, DELETE"); // TODO hardcoded, also I intend to allow PUT, not sure if the message based on location permission
             break;
         case 401:
-            resp.addHeader("WWW-Authenticate", "Basic realm=\"Access to site\"");
+            resp.addHeader("www-authenticate", "Basic realm=\"Access to site\"");
             break;
         case 204: // add nothing
             break;

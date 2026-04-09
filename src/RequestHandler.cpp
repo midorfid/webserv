@@ -27,19 +27,8 @@
 // connection close/redirect/?
 
 
-void	RequestHandler::sendString(int client_fd, const std::string &response) const{
-	ssize_t total_sent;
-	ssize_t to_send;
-
-	total_sent = 0;
-	to_send = response.size();
-	while (total_sent < to_send) {
-		ssize_t sent = send(client_fd, response.c_str() + total_sent, to_send - total_sent, 0);
-		if (sent == -1) {
-			throw std::runtime_error("Error sending response");
-		}
-		total_sent += sent;
-	}
+void	RequestHandler::sendString(int client_fd) const{
+	Client &client = 
 }
 
 void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path) const{

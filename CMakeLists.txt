@@ -7,7 +7,7 @@ set(CONF_PATH "${CMAKE_SOURCE_DIR}/config/webserv.conf")
 set(ERROR_LOG "${CMAKE_BINARY_DIR}/var/log/error.log")
 set(ACCESS_LOG "${CMAKE_BINARY_DIR}/var/log/access.log")
 
-# set(CMAKE_CXX_STANDARD 11)
+# set(CMAKE_CXX_STANDARD 17)
 # set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB SRCS "src/*.cpp")
