@@ -1,31 +1,26 @@
 #pragma once
 
 #include <string>
+#include <vector>
+#include <string_view>
 #include "Config.hpp"
-#include "ServerConfig.hpp"
-#include "AParser.hpp"
+#include "lexer.h"
 
-class ParseConfig : public AParser {
-	public:
+class ParseConfig {
+public:
+    ParseConfig() = default;
+    ~ParseConfig() = default;
+    ParseConfig(const ParseConfig &other) = default;
+    ParseConfig &operator=(const ParseConfig &other) = default;
 
-		ParseConfig();
-		~ParseConfig();
+    void parse(const std::string &path, Config &config);
 
-		ParseConfig(const ParseConfig &other);
-		ParseConfig &operator=(const ParseConfig &other);
+private:
+    std::string _file_content; // Backing buffer to keep string_views valid
 
-		void parse(const std::string &path, Config &config);
-
-	private:
-
-		void										parseLimitExceptB(Location	&loc);
-		void										finalizeLocations(std::vector<Location> &loc);
-		void										parseServers();
-		void										parseBlock(AConfigBlock &block);
-		int											checkPath(const std::string &path); // return TODO
-		void										setErrorPage(std::string &error_code, const std::string &file);
-		void										syntaxCheck();
-		std::pair<std::string, std::string>			parseLocDirectives(std::vector<std::string> &tokens);
-		void										parseLocationBlock(Config &config);
-
+    void parseServerBlock(TokenStream &tokens, Config &config);
+    void parseLocationBlock(TokenStream &tokens, Config &config);
+    void parseLimitExceptBlock(TokenStream &tokens, Location &location);
+    std::vector<std::string_view> collectArguments(TokenStream &tokens);
+    void parseDirective(std::string_view name, TokenStream &tokens, SharedContext &ctx);
 };

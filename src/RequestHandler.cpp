@@ -27,24 +27,17 @@
 // connection close/redirect/?
 
 
-void	RequestHandler::sendString(int client_fd) const{
-	Client &client = 
+void	RequestHandler::sendString(Client &client, const std::string &response) const{
+	client.queueResponse(response);
 }
 
-void	RequestHandler::streamFileBody(int client_fd, const std::string &file_path) const{
+void	RequestHandler::streamFileBody(Client &client, const std::string &file_path) const{
 	std::ifstream	file(file_path.c_str(), std::ios::binary);
 
-	char	buf[SBUF];
-	while (file.good()) {
-		file.read(buf, sizeof(buf));
-
-		std::streamsize	bytes_to_send = file.gcount();
-		if (bytes_to_send > 0) {
-			ssize_t sent = send(client_fd, buf, bytes_to_send, 0);
-			if (sent == -1) {
-				throw std::runtime_error("Error sending response file");
-			}
-		}
+	if (file) {
+		std::stringstream buffer;
+		buffer << file.rdbuf();
+		client.queueResponse(buffer.str());
 	}
 }
 
@@ -56,7 +49,7 @@ RequestHandler::calculateTargetSize(const std::string &target_path) const{
 	return info.st_size;
 }
 
-void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) const{
+void			RequestHandler::sendFile(const ResolvedAction &action, Client &client) const{
 	long int file_size = calculateTargetSize(action.target_path);
 	
 	ResponseState res(action.status_code);
@@ -64,8 +57,8 @@ void			RequestHandler::sendFile(const ResolvedAction &action, int client_fd) con
 	Response::finalizeResponse(res, action.req_path, file_size, action.keep_alive);
 
 	const std::string response = Response::build(res);
-	sendString(client_fd, response);
-	streamFileBody(client_fd, action.target_path);
+	sendString(client, response);
+	streamFileBody(client, action.target_path);
 }
 
 int	handleOpenDirFail() {
@@ -142,7 +135,7 @@ std::string		RequestHandler::generatePage(int error_code, const std::string &tex
 	return ss.str();
 }
 
-void			RequestHandler::sendDir(const ResolvedAction &action, int client_fd, const std::string &logic_path) const{
+void			RequestHandler::sendDir(const ResolvedAction &action, Client &client, const std::string &logic_path) const{
 	long int dir_size = calculateTargetSize(action.target_path);
 
 	ResponseState state = createDirListHtml(action.target_path, logic_path);
@@ -150,7 +143,7 @@ void			RequestHandler::sendDir(const ResolvedAction &action, int client_fd, cons
 	Response::finalizeResponse(state, logic_path, dir_size, action.keep_alive);
 	
 	const std::string resp = Response::build(state);
-	sendString(client_fd, resp);
+	sendString(client, resp);
 }
 
 std::string
@@ -236,7 +229,7 @@ std::string RequestHandler::manageFileExtension(const HttpRequest &req, const st
 }
 
 void 
-RequestHandler::putBinary(const HttpRequest &req, int client_fd, const ResolvedAction &action) const{
+RequestHandler::putBinary(const HttpRequest &req, Client &client, const ResolvedAction &action) const{
 	const std::string &url_path = manageFileExtension(req, action.target_path);
 	int status_code = executePut(url_path, req, action.target_path);
 	
@@ -325,7 +318,7 @@ RequestHandler::deleteFileElseError(const ResolvedAction &action) const{
 }
 
 void
-RequestHandler::handleDelete(int client_fd, const ResolvedAction &action) const{
+RequestHandler::handleDelete(Client &client, const ResolvedAction &action) const{
 	int				status_code;
 
 	status_code = deleteFileElseError(action);
@@ -333,27 +326,27 @@ RequestHandler::handleDelete(int client_fd, const ResolvedAction &action) const{
 	Response::finalizeResponse(resp, action.req_path, resp.body.length(), action.keep_alive);
 
 	std::string toSend = Response::build(resp);
-	sendString(client_fd, toSend);
+	sendString(client, toSend);
 }
 
-void RequestHandler::handle(const HttpRequest &req, int client_fd, CgiInfo &state, const ResolvedAction &action) const{
+void RequestHandler::handle(const HttpRequest &req, Client &client, CgiInfo &state, const ResolvedAction &action) const{
 	switch (action.type) {
 		case ACTION_SERVE_FILE:
-			return sendFile(action, client_fd);
+			return sendFile(action, client);
 		case ACTION_GENERATE_ERROR:
-			return sendDefaultError(action, client_fd);
+			return sendDefaultError(action, client);
 		case ACTION_AUTOINDEX:
-			return sendDir(action, client_fd, req.getPath());
+			return sendDir(action, client, req.getPath());
 		case ACTION_CGI:
 			return state.addFds(action); // return 200 status code?
 		case ACTION_REDIRECT:
-			return redirect(client_fd, action);
+			return redirect(client, action);
 		case ACTION_UPLOAD_FILE:
-			return handlePut(req, client_fd, action);
+			return handlePut(req, client, action);
 		case ACTION_DELETE_FILE:
-			return handleDelete(client_fd, action);
+			return handleDelete(client, action);
 		default:
-			return sendDefaultError(action, client_fd);
+			return sendDefaultError(action, client);
 	}
 }
 

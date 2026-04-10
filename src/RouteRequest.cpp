@@ -4,65 +4,46 @@
 #include <fcntl.h>
 #include <string.h>
 #include "log.hpp"
-
-const Location	*RouteRequest::findBestLocationMatch(const Config &serv_cfg, const std::string &url) {
-	const Location	*best_match = NULL;
-	size_t			longest_len = 0;
-	
-	const std::vector<Location>	&locations = serv_cfg.getLocations();
-	for (size_t i = 0; i < locations.size(); ++i) {
-		const std::string &loc_path = locations[i].getPath();
-		if (url.find(loc_path, 0) != url.npos) {
-			if (loc_path.length() > longest_len) {
-				longest_len = loc_path.length();
-				best_match = &locations[i];
-			}
-		}
-	}
-	return best_match;
-}
+#include <string_view>
+#include <algorithm>
+#include <vector>
+#include <cerrno>
 
 ResolvedAction	RouteRequest::resolveErrorAction(int error_code, const Config &serv_cfg, ResolvedAction &action) {
-	std::string		error_url;
+	const auto &error_pages = serv_cfg.getSharedCtx().error_pages;
+	auto it = error_pages.find(error_code);
 
-	if (serv_cfg.getErrorPage(error_code, error_url)) {
+	if (it != error_pages.end()) {
+		const std::string &error_url = it->second;
 		const Location *location = findBestLocationMatch(serv_cfg, error_url);
-		std::string root;
-		if (location != NULL)
-			location->getDirective("root", root);
-		else
-			serv_cfg.getDirective("root", root);
+		
+		std::string root = location ? location->getSharedCtx().root : serv_cfg.getSharedCtx().root;
 		
 		std::string file_path = root + error_url;
 		
 		struct stat st;
 		if (stat(file_path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
-			
 			action.status_code = error_code;
 			action.target_path = file_path;
 			action.type = ACTION_SERVE_FILE;
-			
 			return action;
 		}
 	}
 	action.status_code = error_code;
 	action.type = ACTION_GENERATE_ERROR;
-	
 	return action;
 }
 
 ResolvedAction RouteRequest::resolveFileAction(ResolvedAction &action) {
-
 	action.status_code = 200;
 	action.type = ACTION_SERVE_FILE;
-
 	return action;
 }
 
 bool	RouteRequest::findAccessibleIndex(ResolvedAction &action, const std::string &dir_path,
 											const std::vector<std::string> &indexes) {
-	for (size_t i = 0; i < indexes.size(); ++i) {
-		std::string full_path = dir_path + indexes[i];
+	for (const auto &index : indexes) {
+		std::string full_path = dir_path + index;
 		struct stat st;
 
 		if (stat(full_path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
@@ -75,12 +56,11 @@ bool	RouteRequest::findAccessibleIndex(ResolvedAction &action, const std::string
 	return false;
 }
 
-bool RouteRequest::NoSlash(const std::string &str) {
-	return (str.back() == '/') ? false : true;
+bool RouteRequest::NoSlash(std::string_view str) {
+	return !str.empty() && str.back() != '/';
 }
 
 ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, ResolvedAction &action, int status_code) {
-
 	action.status_code = status_code;
 	action.target_path = dir_path;
 	action.type = ACTION_REDIRECT;
@@ -89,18 +69,14 @@ ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, Resolv
 
 ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const Config &cfg,
 												const Location *location, ResolvedAction &action) {
-	std::vector<std::string>	indexes;
-	
 	if (NoSlash(dir_path))
 		return resolveRedirect(action.req_path + '/', action);
 
-	if (location->getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
-		return action;
-	if (cfg.getIndexes(indexes) && findAccessibleIndex(action, dir_path, indexes))
+	const auto &loc_ctx = location->getSharedCtx();
+	if (!loc_ctx.index_files.empty() && findAccessibleIndex(action, dir_path, loc_ctx.index_files))
 		return action;
 
-	std::string	autoindex;
-	if (location->isAutoindexOn()) {
+	if (loc_ctx.autoindex) {
 		action.status_code = 200;
 		action.target_path = dir_path;
 		action.type = ACTION_AUTOINDEX;
@@ -136,18 +112,32 @@ ResolvedAction	RouteRequest::checkReqPath(const Config &cfg, const Location *loc
 	}
 	if (action.type == ACTION_DELETE_FILE)
 		return resolveDeleteAction(action);
-	if (S_ISDIR((&info)->st_mode)) {
+
+	if (S_ISDIR(info.st_mode)) {
 		return resolveDirAction(action.target_path, cfg, location, action);
 	}
-	else if (S_ISREG((&info)->st_mode))
+	else if (S_ISREG(info.st_mode)) {
 		return resolveFileAction(action);
-	//Fallback
+	}
 	return resolveErrorAction(403, cfg, action);
 }
 
+bool RouteRequest::checkLimitExcept(const std::string &method, const Location &loc) {
+	const auto &limit_opt = loc.getLimitExcept();
+	if (!limit_opt.has_value()) return true;
+
+	HttpMethod req_met = StringUtils::stringToMethod(method);
+	int allowed_mask = 0;
+	
+	for (const auto &m : *limit_opt) {
+		allowed_mask |= StringUtils::stringToMethod(m);
+	}
+	return (req_met & allowed_mask) != 0;
+}
+
 ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req, const std::string &client_ip) {
+	(void)client_ip; // Dropped IP tracking arg for now
 	ResolvedAction			action;
-	std::string				phys_path;
 	const std::string		&req_path = req.getPath();
 	
 	action.keep_alive = false;
@@ -155,25 +145,25 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	action.type = ACTION_NONE;
 	
 	const Location *location = findBestLocationMatch(serv_cfg, req_path);
-	if (location == NULL) {
+	if (!location) {
 		return resolveErrorAction(404, serv_cfg, action);
 	}
-	if (location && location->hasRedirect()) {
-		std::pair<int, std::string> redirInfo = location->getRedirect();
-		return resolveRedirect(redirInfo.second, action, redirInfo.first);
-	}
-	if (!location->checkLimExceptAccess(req.getMethod(), client_ip)) {
-		return resolveErrorAction(403, serv_cfg, action);
+
+	const auto &ctx = location->getSharedCtx();
+	if (ctx.redirect.has_value()) {
+		return resolveRedirect(ctx.redirect->second, action, ctx.redirect->first);
 	}
 
-	if (req.isKeepAlive() && serv_cfg.isKeepAlive())
+	if (!checkLimitExcept(req.getMethod(), *location)) {
+		return resolveErrorAction(405, serv_cfg, action);
+	}
+
+	if (req.isKeepAlive() && ctx._keepalive_timer > 0)
 		action.keep_alive = true;
 	
 	setActionType(action, req.getMethod());
 
-	PathFinder(req, *location, serv_cfg, action);
-
-	return action; 
+	return PathFinder(req, *location, serv_cfg, action);
 }
 
 void 
@@ -185,35 +175,36 @@ RouteRequest::setActionType(ResolvedAction &action, const std::string &met) {
 }
 
 std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, ActionType at) {
-	std::string		full_path; // query?? TODO
+	std::string		full_path;
 	struct stat		info;
 
 	if (reqPath.find(root_path) != std::string::npos) {
 		full_path = reqPath;
 	}
 	else {
-		if (root_path.back() == '/' && reqPath.front() == '/')
-			root_path.erase(--root_path.end());
+		if (!root_path.empty() && root_path.back() == '/' && !reqPath.empty() && reqPath.front() == '/')
+			root_path.pop_back();
 		full_path = root_path + reqPath;
 	}
+
 	if (at != ACTION_UPLOAD_FILE && stat(full_path.c_str(), &info) != 0) {
 		logTime(ERRLOG);
 		std::cerr << "RouteRequest::catPathes() stat() failed :(" << std::endl;
 	}
-
 	return full_path;
 }
 
 ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, ResolvedAction &action) {
-	std::string root_path;
-
-	if (loc.getDirective("root", root_path) == false) {
-		if (serv_cfg.getDirective("root", root_path) == false)
-			return resolveErrorAction(500, serv_cfg, action);
-	}
+	std::string root_path = loc.getSharedCtx().root;
+	if (root_path.empty()) root_path = serv_cfg.getSharedCtx().root;
+	
 	action.target_path = catPathes(req.getPath(), root_path, action.type);
 	
-	if (loc.isCgiRequest(action.target_path)) {
+	auto ends_with = [](std::string_view str, std::string_view suffix) {
+		return str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), std::string_view::npos, suffix) == 0;
+	};
+
+	if (loc.getSharedCtx().allow_cgi && (ends_with(action.target_path, ".py") || ends_with(action.target_path, ".cgi"))) {
 		return resolveCgiScript(serv_cfg, req, loc, action);
 	}
 
@@ -229,13 +220,13 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 	if (pipe(serv_to_cgi) == -1 || pipe(cgi_to_serv) == -1) {
 		logTime(ERRLOG);
 		std::cerr << "pipe" << std::endl;
-		resolveErrorAction(500, serv_cfg, action);
+		return resolveErrorAction(500, serv_cfg, action);
 	}
 	cpid = fork();
 	if (cpid == -1) {
 		logTime(ERRLOG);
 		std::cerr << "fork" << std::endl;
-		resolveErrorAction(500, serv_cfg, action);
+		return resolveErrorAction(500, serv_cfg, action);
 	}
 	if (cpid == 0) {
 		close(cgi_to_serv[0]);
@@ -244,32 +235,34 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 		if (dup2(serv_to_cgi[0], STDIN_FILENO) == -1) {
 			logTime(ERRLOG);
 			std::cerr << "dup2" << std::endl;
-			resolveErrorAction(500, serv_cfg, action);
+			exit(EXIT_FAILURE);
 		}
 		if (dup2(cgi_to_serv[1], STDOUT_FILENO) == -1) {
 			logTime(ERRLOG);
 			std::cerr << "dup2" << std::endl;
-			resolveErrorAction(500, serv_cfg, action);
+			exit(EXIT_FAILURE);
 		}
 
 		close(cgi_to_serv[1]);
 		close(serv_to_cgi[0]);
 
 		Environment	envp_builder(req, loc);
-
 		envp_builder.build(action.target_path);
 
-		char *intep = const_cast<char*>("/usr/bin/python3"); // TODO hardcoded change!
-		char *program = const_cast<char*>("./www/CgiPostHandler.py");
+		std::string interp = "/usr/bin/python3";
+		std::string prog = action.target_path;
 
-		char *const argv[] = {intep, program, NULL};
+		std::vector<char*> argv;
+		argv.push_back(const_cast<char*>(interp.c_str()));
+		argv.push_back(const_cast<char*>(prog.c_str()));
+		argv.push_back(nullptr);
+
 		logTime(REGLOG);
-		if (execve(program, argv, envp_builder.getEnvp()) == -1) {
+		if (execve(interp.c_str(), argv.data(), envp_builder.getEnvp()) == -1) {
 			logTime(ERRLOG);
-			std::cerr << "execve error" << std::endl;
-			std::cerr << strerror(errno) << std::endl;
+			std::cerr << "execve error: " << strerror(errno) << std::endl;
 		}
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	else {
 		close(serv_to_cgi[0]);
@@ -279,7 +272,7 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 			fcntl(cgi_to_serv[0], F_SETFL, O_NONBLOCK) == -1) {
 				logTime(ERRLOG);
 				std::cerr << "fcntl" << std::endl;
-				resolveErrorAction(500, serv_cfg, action);
+				return resolveErrorAction(500, serv_cfg, action);
 		}
 		
 		action.type = ACTION_CGI;
@@ -287,8 +280,6 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 		action.cgi_fds.first = cgi_to_serv[0];
 		action.cgi_fds.second = serv_to_cgi[1];
 
-		// close(serv_to_cgi[1]);
-		// close(cgi_to_serv[0]);
 		return action;
 	}
 }

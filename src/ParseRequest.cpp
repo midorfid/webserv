@@ -15,102 +15,91 @@
 #define SPACE ' '
 #define MAX_URL_LENGTH 2048
 
-/* Finds token in the src, if it's not there returns the src. */
-template <typename T>
-std::string		ParseRequest::trimToken(std::string &src, T token) {
-	size_t			ele_pos;
-	std::string		res;
-
-	ele_pos = src.find(token);
-	
-	if (ele_pos != src.npos) {
-		res = src.substr(0, ele_pos + 1);
-		src.erase(0, ele_pos + 1);
-		return	res;
-	}
-	return src;
+static inline std::string_view trimLeftWhitespaceSV(std::string_view s) {
+    size_t start = s.find_first_not_of(" \r\t\n\f\v");
+    return (start == std::string_view::npos) ? "" : s.substr(start);
 }
 
-template <typename T>
-std::string		ParseRequest::trimPathRetQuery(std::string &pathAndQuery, T token) {
-	size_t			ele_pos;
-	std::string		res = "";
-
-	ele_pos = pathAndQuery.find(token);
-
-	if (ele_pos != pathAndQuery.npos) {
-		res = pathAndQuery.substr(ele_pos + 1);
-		pathAndQuery.erase(ele_pos);
-	}
-	return res;
+static inline std::string_view trimRightWhitespaceSV(std::string_view s) {
+    size_t end = s.find_last_not_of(" \r\t\n\f\v");
+    return (end == std::string_view::npos) ? "" : s.substr(0, end + 1);
 }
 
-
-std::vector<std::string>    ParseRequest::tokenizeFirstLine(const std::string &first_line) {
-	std::vector<std::string>    tokens;
-	std::string                 token;
-	std::stringstream          	tokenStream;
-
-	tokenStream.str(first_line);
-	
-	while (tokenStream >> token) {
-		tokens.push_back(token);
-	}
-	return tokens;
+static inline std::string_view trimWhitespacesSV(std::string_view s) {
+    return trimRightWhitespaceSV(trimLeftWhitespaceSV(s));
 }
 
-void		ParseRequest::parseMethod(std::string &method, HttpRequest &req) {
-	req.setMethod(method);
+std::vector<std::string_view> ParseRequest::tokenizeFirstLine(std::string_view first_line) {
+    std::vector<std::string_view> tokens;
+    size_t start = 0;
+    while (start < first_line.length()) {
+        while (start < first_line.length() && first_line[start] == ' ') start++;
+        if (start >= first_line.length()) break;
+        size_t end = first_line.find(' ', start);
+        if (end == std::string_view::npos) end = first_line.length();
+        tokens.push_back(first_line.substr(start, end - start));
+        start = end;
+    }
+    return tokens;
 }
 
-void		ParseRequest::parsePathAndQuery(std::string &pathAndQuery, HttpRequest &req) {
-	std::string		query;
-
-	query = trimPathRetQuery(pathAndQuery, '?');
-	std::cout << "query:" << query << std::endl;
-	req.setPath(pathAndQuery);
-	req.setQuery(query);
+void		ParseRequest::parseMethod(std::string_view method, HttpRequest &req) {
+	req.setMethod(std::string(method));
 }
 
-
-void		ParseRequest::parseHttpVer(std::string &httpVer, HttpRequest &req) {
-	req.setVersion(httpVer);
+void		ParseRequest::parsePathAndQuery(std::string_view pathAndQuery, HttpRequest &req) {
+    size_t pos = pathAndQuery.find('?');
+    if (pos != std::string_view::npos) {
+        req.setPath(std::string(pathAndQuery.substr(0, pos)));
+        req.setQuery(std::string(pathAndQuery.substr(pos + 1)));
+    } else {
+        req.setPath(std::string(pathAndQuery));
+        req.setQuery("");
+    }
 }
 
-std::string		ParseRequest::getNextLine(std::string &request) {
-	return trimToken(request, EOL);
+void		ParseRequest::parseHttpVer(std::string_view httpVer, HttpRequest &req) {
+	req.setVersion(std::string(httpVer));
 }
 
-bool	ParseRequest::hasUnderscore(const std::string &s) const {
-	return s.find('_') != s.npos;
+std::string_view	ParseRequest::getNextLine(std::string_view &request) {
+    size_t pos = request.find("\r\n");
+    if (pos == std::string_view::npos) {
+        std::string_view line = request;
+        request = std::string_view();
+        return line;
+    }
+    std::string_view line = request.substr(0, pos);
+    request.remove_prefix(pos + 2); // advance past \r\n
+    return line;
 }
 
-void		ParseRequest::parseHeaders(std::string &request, HttpRequest &req) {
-	std::string		header_line = "";
-	std::string		key;
-	std::string		value;
-	size_t			delim_pos;
+bool	ParseRequest::hasUnderscore(std::string_view s) const {
+	return s.find('_') != std::string_view::npos;
+}
 
-	while(header_line == "\r\n\r\n" || !request.empty()) {
-		header_line = getNextLine(request);
-		if (header_line == EOL)
+void		ParseRequest::parseHeaders(std::string_view request, HttpRequest &req) {
+	while(!request.empty()) {
+		std::string_view header_line = getNextLine(request);
+		if (header_line.empty())
 			break;
-		delim_pos = header_line.find(':');
-		if (delim_pos == header_line.npos)
+		size_t delim_pos = header_line.find(':');
+		if (delim_pos == std::string_view::npos)
 			break;
-		key = header_line.substr(0, delim_pos);
-		if (hasUnderscore(key))
+		std::string_view key_view = header_line.substr(0, delim_pos);
+		if (hasUnderscore(key_view))
 			continue;
+		std::string key(trimWhitespacesSV(key_view));
 		std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-		value = header_line.substr(delim_pos + 1);
-		trimLeftWhitespace(key);
-		trimLeftWhitespace(value);
+		std::string value(trimWhitespacesSV(header_line.substr(delim_pos + 1)));
 		req.addHeader(key, value);
 	}
 }
 
-ParseResult		ParseRequest::parseFirstLine(std::string &_current_line, HttpRequest &req) {
-	std::vector<std::string> first_line = tokenizeFirstLine(_current_line);
+ParseResult		ParseRequest::parseFirstLine(std::string_view _current_line, HttpRequest &req) {
+	std::vector<std::string_view> first_line = tokenizeFirstLine(_current_line);
+
+    if (first_line.size() < 3) return Error;
 
 	parseMethod(first_line[0], req);
 	if (first_line[1].length() > MAX_URL_LENGTH)
@@ -120,20 +109,47 @@ ParseResult		ParseRequest::parseFirstLine(std::string &_current_line, HttpReques
 	return Okay;
 }
 
-ParseResult	ParseRequest::parseBody(std::string &reqOnlyBody, HttpRequest &req) {
-	size_t	body_size = 0;
-	try
-	{
-		body_size = std::strtoul(req.getHeader("content-length").c_str(), NULL, 10);
-	}
-	catch(const std::exception& e){}
-	if (reqOnlyBody.empty())
-		return NothingToRead;
-	if (body_size > 0 && reqOnlyBody.length() < body_size - req.getBody().length()) {
-		req.appendBody(reqOnlyBody);
-		return 	RequestIncomplete;
-	}
-	req.setBody(reqOnlyBody);
+ParseResult	ParseRequest::parseBody(std::string_view reqOnlyBody, HttpRequest &req) {
+    if (req.getHeader("transfer-encoding") == "chunked") {
+        std::string decoded_body;
+        size_t pos = 0;
+        
+        while (pos < reqOnlyBody.length()) {
+            size_t crlf = reqOnlyBody.find("\r\n", pos);
+            if (crlf == std::string_view::npos) return RequestIncomplete;
+            
+            std::string_view hex_len = reqOnlyBody.substr(pos, crlf - pos);
+            size_t chunk_len = 0;
+            try { 
+                chunk_len = std::stoull(std::string(hex_len), nullptr, 16); 
+            } catch(...) { 
+                return Error; 
+            }
+            
+            if (chunk_len == 0) { // Terminal chunk
+                req.setBody(decoded_body);
+                return RequestComplete;
+            }
+            
+            if (crlf + 2 + chunk_len + 2 > reqOnlyBody.length()) return RequestIncomplete;
+            
+            decoded_body.append(reqOnlyBody.substr(crlf + 2, chunk_len));
+            pos = crlf + 2 + chunk_len + 2;
+        }
+        return RequestIncomplete;
+    }
+
+    size_t body_size = 0;
+    try { body_size = std::strtoul(req.getHeader("content-length").c_str(), NULL, 10); } catch(...) {}
+    
+    if (reqOnlyBody.empty() && body_size > 0) return RequestIncomplete;
+    if (reqOnlyBody.empty()) return NothingToRead;
+    
+    if (body_size > 0 && reqOnlyBody.length() < body_size) {
+        return RequestIncomplete; // Wait for full buffer to arrive
+    }
+    
+    req.setBody(std::string(reqOnlyBody));
 
 	return RequestComplete;
 }
@@ -171,11 +187,11 @@ std::string	normalizePath(const std::string &req_path) {
 	return norm_path;
 }
 
-ParseResult ParseRequest::parseReqLineHeaders(std::string &reqNoBody, HttpRequest &req) {
-	std::string				_current_line;
+ParseResult ParseRequest::parseReqLineHeaders(std::string_view reqNoBody, HttpRequest &req) {
+	std::string_view		_current_line;
 
 	
-	_current_line = trimToken(reqNoBody, EOL);
+	_current_line = getNextLine(reqNoBody);
 	if (parseFirstLine(_current_line, req) == UrlTooLong)
 		return UrlTooLong;
 	

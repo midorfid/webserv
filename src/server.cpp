@@ -40,18 +40,16 @@ void	Server::disconnect_client(int client_fd) {
 		logTime(ERRLOG);
 		fprintf(stderr, "epoll_ctl (DEL): %s\n", strerror(errno));
 	}
-	close(client_fd);
 	logTime(REGLOG);
 	_clients.erase(client_fd);
 	std::cout << "Client on fd " << client_fd << " disconnected." << std::endl;
 }
 
-std::map<int,Client>::iterator	Server::disconnect_client(std::map<int,Client>::iterator &it, int client_fd) {
+std::map<int, std::unique_ptr<Client>>::iterator Server::disconnect_client(std::map<int, std::unique_ptr<Client>>::iterator &it, int client_fd) {
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL) == -1) {
 		logTime(ERRLOG);
 		fprintf(stderr, "epoll_ctl (DEL): %s\n", strerror(errno));
 	}
-	close(client_fd);
 	logTime(REGLOG);
 	std::cout << "Client on fd " << client_fd << " disconnected." << std::endl;
 	return	_clients.erase(it);
@@ -165,7 +163,7 @@ Server::disconnectCgiFds(Client &client) {
 void 
 Server::handle_cgi_write(int write_fd) {
 	const int	&client_fd = _cgi_client[write_fd];
-	Client		&client = clients[client_fd]; 
+	Client		&client = *_clients[client_fd]; 
 	std::string &body = client.req().getBody();
 	int			remaining;
 	
@@ -229,11 +227,12 @@ Server::parseAndQoutputBuf(Client &client, int client_fd) {
 		}
 		headers_offset = end_line + 2;
 	}
-	Response::finalizeResponse(resp, client.req.getPath(), body.length(), client.isKeepAliveConn());
-	//queue
+	Response::finalizeResponse(resp, client.req().getPath(), body.length(), client.isKeepAliveConn());
+	client.queueResponse(Response::build(resp) + body);
 	
 	struct epoll_event	*ev;
-	ev.events = EPOLLOUT;
+	ev.events = EPOLLIN | EPOLLOUT;
+	ev.data.fd = client_fd;
 	epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, ev);
 
 }
@@ -241,7 +240,7 @@ Server::parseAndQoutputBuf(Client &client, int client_fd) {
 void
 Server::handle_cgi_read(int &read_fd) {
 	int				&client_fd = _cgi_client[read_fd];
-	Client			&client = _clients[client_fd];
+	Client			&client = *_clients[client_fd];
 	std::string		&out_buf = client.getCgi_state().output_buf;
 
 	logTime(REGLOG);
@@ -283,12 +282,12 @@ Server::diffTime(const time_t &client_tm) {
 }
 
 void	Server::checkTimeouts() {
-	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end();) {
-		double quiet_time = diffTime(it->second.getLastActivity());
+	for (auto it = _clients.begin(); it != _clients.end();) {
+		double quiet_time = diffTime(it->second->getLastActivity());
 
-		if (it->second.getClientState() != IDLE) {
+		if (it->second->getClientState() != IDLE) {
 			if (quiet_time > 60) {
-				_handler.sendDefaultError(408, it->first);
+				_handler.sendDefaultError(408, *it->second);
 				it = disconnect_client(it, it->first);
 			}
 		}
@@ -491,7 +490,7 @@ Server::getClientAddr(struct sockaddr_storage &client_addr) {
 void
 Server::handleDefault(Client &client, int client_fd) {
 	ResolvedAction action = _route_reslvr.resolveRequestToHandler(_config, client.req(), client.ip());
-	_handler.handle(client.req(), client_fd, client.cgi_state(), action);
+	_handler.handle(client.req(), client, client.cgi_state(), action);
 
 	client.updateLastActivity();
 
@@ -500,13 +499,24 @@ Server::handleDefault(Client &client, int client_fd) {
 	if (cgi.isCgi()) {
 		epoll_add_cgi(std::make_pair(cgi.getReadfd(), cgi.getWritefd()), client_fd);
 	}
-	disconnect_ifNoKeepAlive(client, client_fd);
+	else {
+		struct epoll_event ev;
+		ev.events = EPOLLIN | EPOLLOUT;
+		ev.data.fd = client_fd;
+		epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+	}
 }
 
 void
 Server::terminateConnWithError(int client_fd, int error_code) {
- 	_handler.sendDefaultError(error_code, client_fd);
-	disconnect_client(client_fd);
+	Client &client = *_clients[client_fd];
+	_handler.sendDefaultError(error_code, client);
+	client.disableKeepAlive();
+	
+	struct epoll_event ev;
+	ev.events = EPOLLOUT;
+	ev.data.fd = client_fd;
+	epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
 }
 
 void
@@ -519,7 +529,7 @@ Server::disconnect_ifNoKeepAlive(Client &client, int client_fd) {
 void
 Server::handle_client_event(int client_fd) {
 	try {
-		Client &client = _clients.at(client_fd);
+		Client &client = *_clients.at(client_fd);
 		
 		ParseResult status = client.processNewData(*this);
 		switch (status) {

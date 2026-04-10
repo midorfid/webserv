@@ -7,6 +7,7 @@
 #include "RequestHandler.hpp"
 #include "log.hpp"
 #include "RouteRequest.hpp"
+#include <memory>
 
 class Server {
     public:
@@ -19,7 +20,7 @@ class Server {
 
         void    run(const std::string &cfg_file);
 
-        std::map<int,Client>::iterator	        disconnect_client(std::map<int,Client>::iterator &it, int client_fd);
+        std::map<int, std::unique_ptr<Client>>::iterator disconnect_client(std::map<int, std::unique_ptr<Client>>::iterator &it, int client_fd);
         void    		        				disconnect_client(int client_fd);
         const std::string       				&port() const;
         std::pair<std::string, std::string>		getClientAddr(struct sockaddr_storage &client_addr);
@@ -33,7 +34,7 @@ class Server {
         std::string                             _port;
         int                                     _listen_sock;
         int                                     _epoll_fd;
-        std::map<int, Client>                   _clients;
+        std::map<int, std::unique_ptr<Client>>  _clients;
         Config                                  _config;
         ParseConfig				                _ConfigParser;
 		RouteRequest	                        _route_reslvr;

@@ -1,39 +1,26 @@
 #pragma once
 
 #include <string>
-#include <map>
 #include <vector>
 #include "Location.hpp"
+#include "SharedCtx.hpp"
 
-class Config : public AConfigBlock {
-	public:
+class Config {
+public:
+    Config();
+    ~Config();
 
-		Config();
-		~Config();
+    Config(const Config &other);
+    Config &operator=(const Config &other);
 
-		Config(const Config &other);
-		Config &operator=(const Config &other);
+    SharedContext &getSharedCtx() { return _shared_ctx; }
+    const SharedContext &getSharedCtx() const { return _shared_ctx; }
+    
+    void setPort(int port) { _port = port; }
+    void addLocation(const Location &loc) { _locations.push_back(loc); }
 
-		const std::vector<Location>		&getLocations() const;
-		bool   							checkIfDuplicate(const std::string &path) const;
-		bool							getPort(const std::string &key, std::string &out_val) const;
-		int								getKeepAliveTimer(void) const;
-		int								getMaxBodySize() const;
-
-		void						setMaxBodySize(int);
-		void						setLocCgi();
-		bool						getErrorPage(int code, std::string &errorPage) const;
-		Location					&getNewLocation();
-		void						setKeepAliveTimer(int);
-
-		bool						isKeepAlive() const;
-	private:
-
-		void				    					setError_page(const std::string &value);
-		
-    	std::map<int, std::string>			_error_pages;
-		std::vector<Location>				_locations;
-		int									_port;
-		int									_keepalive_timer;
-		int									_max_body_size;
+private:
+    SharedContext _shared_ctx;
+    std::vector<Location> _locations;
+    int _port;
 };

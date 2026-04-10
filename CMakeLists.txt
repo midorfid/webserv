@@ -2,13 +2,13 @@ cmake_minimum_required(VERSION 3.10)
 
 project(webserv)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(EXEC_NAME "webserv")
 set(CONF_PATH "${CMAKE_SOURCE_DIR}/config/webserv.conf")
 set(ERROR_LOG "${CMAKE_BINARY_DIR}/var/log/error.log")
 set(ACCESS_LOG "${CMAKE_BINARY_DIR}/var/log/access.log")
-
-# set(CMAKE_CXX_STANDARD 17)
-# set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB SRCS "src/*.cpp")
 

@@ -1,52 +1,28 @@
 #pragma once
 
 #include <string>
-#include <map>
-#include "AConfigBlock.hpp"
+#include <vector>
+#include <optional>
+#include "SharedCtx.hpp"
 #include "StringUtils.hpp"
 
-class Location : public AConfigBlock {
-	public:
+class Location {
+public:
+    Location();
+    ~Location();
+    Location(const Location &other);
+    Location &operator=(const Location &other);
 
-		Location() : _path(""), _rules(), _hasRedirect(false), _redirectCode(0) {}
-		~Location() {}
-		Location(const Location &other) : AConfigBlock(other), _path(other._path), _rules(other._rules),
-				_hasRedirect(other._hasRedirect), _redirectCode(other._redirectCode), _redirectURL(other._redirectURL) {}
-		Location &operator=(const Location &other) {
-			if (this != &other) {
-				AConfigBlock::operator=(other);
-				_path = other._path;
-				_rules = other._rules;
-				_hasRedirect = other._hasRedirect;
-				_redirectCode = other._redirectCode;
-				_redirectURL = other._redirectURL;
-			}
-			return *this;
-		}
+    void setSharedCtx(const SharedContext &ctx) { _shared_ctx = ctx; }
+    void setPath(const std::string &path) { _path = path; }
+    void setLimitExcept(const std::vector<std::string> &methods) { _limit_except = methods; }
 
-		const std::string			&getPath() const { return this->_path; }
-		void						setPath(const std::string &path) { this->_path = path; }
+    const std::string &getPath() const { return _path; }
+    const SharedContext &getSharedCtx() const { return _shared_ctx; }
+    const std::optional<std::vector<std::string>> &getLimitExcept() const { return _limit_except; }
 
-		void						addLimitExceptRule(const std::string &key, const std::string &value);
-		void						addLimitExceptMethod(const HttpMethod &methBit);
-
-
-		bool						checkLimExceptAccess(const std::string &meth, const std::string &ip) const;
-
-		bool							hasRedirect() const;
-		void							setRedirect(const std::string &url, int status_code);
-		std::pair<int, std::string>		getRedirect() const;
-		// void						_setDirective(const std::string &key, const std::string &value);
-        // void						_setMultiDirective(const std::string &key, const std::vector<std::string> &value);
-		// void						_setErrorPage(const std::string &error_code, const std::string &file);
-		// void						_addLimitExceptRules(const std::string &key, const std::string &value);
-
-	private:
-
-		std::string							_path;
-		limitExceptRules					_rules;
-
-		bool								_hasRedirect;
-		int									_redirectCode;
-		std::string							_redirectURL;
+private:
+    std::string _path;
+    SharedContext _shared_ctx;
+    std::optional<std::vector<std::string>> _limit_except;
 };

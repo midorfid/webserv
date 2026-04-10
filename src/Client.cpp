@@ -10,26 +10,12 @@
 #define BUF_SIZE 4096
 #define MAX_HEADERS_SIZE 8192
 
-Client::Client() : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
+Client::Client() : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(-1), _response_offset(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
 
 Client::~Client() {
-}
-
-Client::Client(const Client &other) { *this = other; }
-
-Client &Client::operator=(const Client &other) {
-    if (this != &other) {
-        this->bytes_written_to_cgi = other.bytes_written_to_cgi;
-		this->_request_buffer = other._request_buffer;
-        this->_last_activity = other._last_activity;
-        this->_parser = other._parser;
-        this->_req = other._req;
-		this->_ip_string = other._ip_string;
-		this->_port = other._port;
-		this->_sock_fd = other._sock_fd;
-		this->_cgi_state = other._cgi_state;
-    }
-    return *this;
+	if (_sock_fd != -1) {
+		close(_sock_fd);
+	}
 }
 
 const HttpRequest &
@@ -84,7 +70,7 @@ Client::processNewData(Server &server) {
 				_state = READING_BODY;
 				endofheaders = _request_buffer.find("\r\n\r\n");
 				
-				_request_buffer.erase(0, endofheaders + 1);
+				_request_buffer.erase(0, endofheaders + 4);
 			}
 		}
 		if (getClientState() == READING_BODY) {
@@ -141,6 +127,8 @@ Client::reset() {
 	_cgi_state = CgiInfo(false);
 	_state = IDLE;
 	bytes_written_to_cgi = 0;
+	_response_queue.clear();
+	_response_offset = 0;
 }
 
 bool
@@ -149,14 +137,41 @@ Client::isKeepAliveConn() const {
 }
 
 Client::Client(std::string &ip, std::string &port, int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE),
-		_ip_string(ip), _port(port), _sock_fd(sock_fd), _request_buffer(""), _parser(), _req(), _cgi_state(false) {
+		_ip_string(ip), _port(port), _sock_fd(sock_fd), _response_offset(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {
 	logTime(REGLOG);
 	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
 }
 
-Client::Client(int sock_fd) : _sock_fd(sock_fd) {}
+Client::Client(int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(sock_fd), _response_offset(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
 
 CgiInfo &
 Client::getCgi_state() {
 	return _cgi_state;
+}
+
+void Client::queueResponse(const std::string &response) {
+	_response_queue.append(response);
+	_state = WRITING_RESPONSE;
+}
+
+bool Client::writeResponseChunk() {
+	if (_response_offset >= _response_queue.size()) return true;
+
+	size_t remaining = _response_queue.size() - _response_offset;
+	size_t chunk_size = std::min(remaining, static_cast<size_t>(8192)); // Strict 8KB limits
+
+	ssize_t sent = send(_sock_fd, _response_queue.data() + _response_offset, chunk_size, 0);
+	if (sent > 0) {
+		_response_offset += sent;
+		updateLastActivity();
+		if (_response_offset >= _response_queue.size()) {
+			_state = DONE;
+			return true;
+		}
+	} else if (sent == -1) {
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {
+			throw std::runtime_error("Write error on client socket");
+		}
+	}
+	return false;
 }

@@ -37,10 +37,10 @@ class RouteRequest {
 
 		std::string			catPathes(const std::string &reqPath, std::string &root_path, ActionType at);
 		ResolvedAction		resolveRedirect(const std::string &dir_path, ResolvedAction &action, int status_code = 301);
-		bool				NoSlash(const std::string &str);
+		bool				NoSlash(std::string_view str);
 		ResolvedAction		PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, ResolvedAction &action);
-		bool				checkLimitExcept(const std::string &method, const std::string &client_ip);
-        const Location      *findBestLocationMatch(const Config &serv_cfg, const std::string &url);
+		bool				checkLimitExcept(const std::string &method, const Location &loc);
+        const Location      *findBestLocationMatch(const Config &serv_cfg, std::string_view url);
         std::string			handlePath(const Config &serv_cfg, HttpRequest &req);
 		ResolvedAction		resolveErrorAction(int error_code, const Config &serv_cfg, ResolvedAction &action);
 		ResolvedAction		resolveFileAction(ResolvedAction &action);

@@ -25,8 +25,8 @@ class Client {
 	Client(std::string &, std::string &, int sock_fd);
 	~Client();
 	
-	Client(const Client &other);
-	Client &operator=(const Client &other);
+	Client(const Client &other) = delete;
+	Client &operator=(const Client &other) = delete;
 	
 	
 	const HttpRequest &req() const;
@@ -41,6 +41,10 @@ class Client {
 	std::string const	&port() const;
 	void				reset();
 	CgiInfo				&getCgi_state();
+	
+	void				disableKeepAlive() { _last_activity = 0; }
+	void				queueResponse(const std::string &response);
+	bool				writeResponseChunk();
 
 	int						bytes_written_to_cgi;
 	ResponseState			resp_state;
@@ -53,6 +57,8 @@ class Client {
 		std::string		_ip_string;
 		std::string		_port;
 		int				_sock_fd;
+		std::string		_response_queue;
+		size_t			_response_offset;
 
 		std::string		_request_buffer;
         ParseRequest    _parser;

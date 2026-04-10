@@ -19,3 +19,5 @@ test_image.jpg
 __pycache__/
 test.txt
 input.bin
+
+ARCHITECTURE.md
