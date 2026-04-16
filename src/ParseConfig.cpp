@@ -13,13 +13,13 @@
 #include "StringUtils.hpp"
 #include "lexer.h"
 
-void
-ParseConfig::parse(const std::string &path, Config &config) {
+std::vector<Config>
+ParseConfig::parse(const std::string &path) {
     std::ifstream file(path);
     if (!file.is_open()) {
         throw std::runtime_error("Could not open config file: " + path);
     }
-    
+
     std::stringstream buffer;
     buffer << file.rdbuf();
     _file_content = buffer.str();
@@ -27,20 +27,23 @@ ParseConfig::parse(const std::string &path, Config &config) {
     std::vector<std::string_view> tokens_vec = TokenStream::buildTokens(_file_content);
     TokenStream tokens(tokens_vec);
 
+    std::vector<Config> vhosts;
     while (tokens.hasNext()) {
         auto token = tokens.next();
         if (token == "server") {
-            parseServerBlock(tokens, config);
+            vhosts.push_back(parseServerBlock(tokens));
         } else {
             throw std::runtime_error("Unexpected token in global scope: " + std::string(token));
         }
     }
+    return vhosts;
 }
 
-void
-ParseConfig::parseServerBlock(TokenStream &tokens, Config &config) {
+Config
+ParseConfig::parseServerBlock(TokenStream &tokens) {
     tokens.expect("{");
-    
+
+    Config config;
     SharedContext &server_ctx = config.getSharedCtx();
 
     while (tokens.hasNext() && tokens.peek() != "}") {
@@ -59,6 +62,7 @@ ParseConfig::parseServerBlock(TokenStream &tokens, Config &config) {
         }
     }
     tokens.expect("}");
+    return config;
 }
 
 void
@@ -134,6 +138,12 @@ ParseConfig::parseDirective(std::string_view name, TokenStream &tokens, SharedCo
     } else if (name == "return") {
         if (args.size() != 2) throw std::runtime_error("return expects 2 arguments");
         ctx.redirect = std::make_pair(std::stoi(std::string(args[0])), std::string(args[1]));
+    } else if (name == "server_names") {
+        for (auto arg : args) {
+            ctx.server_names.push_back(std::string(arg));
+        }
+    } else if (name == "allow_cgi") {
+        ctx.allow_cgi = true; // extensions are checked in RouteRequest via ends_with
     } else {
         throw std::runtime_error("Unknown directive: " + std::string(name));
     }

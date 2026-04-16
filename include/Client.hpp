@@ -40,8 +40,11 @@ class Client {
 	std::string const	&ip() const;
 	std::string const	&port() const;
 	void				reset();
-	CgiInfo				&getCgi_state();
-	
+	CgiInfo				&cgi_state() { return _cgi_state; }
+
+	void				setServerPort(int port) { _server_port = port; }
+	int					getServerPort() const   { return _server_port; }
+
 	void				disableKeepAlive() { _last_activity = 0; }
 	void				queueResponse(const std::string &response);
 	bool				writeResponseChunk();
@@ -60,6 +63,7 @@ class Client {
 		std::string		_response_queue;
 		size_t			_response_offset;
 
+		int				_server_port;
 		std::string		_request_buffer;
         ParseRequest    _parser;
 		HttpRequest     _req;

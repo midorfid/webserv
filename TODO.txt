@@ -6,11 +6,11 @@ script header typos
 // IMPORTANT!!! Apparenlty, I've got a BLOCKING server, I should separate EPOLLIN and EPOLLOUT logic.
 
 //TODO kill() cgi script in case client hung up during script execution
-handle pid_t child in the cgiInfo
+handle pid_t child in the cgiInfo -> kinda done, gotta code review
 
-//TODO parse cgi script response and queue it to the epoll
+//TODO parse cgi script response and queue it to the epoll -> kinda done, gotta code review
 
-//TODO add reponse queue to the client
+//TODO add reponse queue to the client -> kinda done, gotta code review
 
 //TODO add client state and implement it into checkTimeouts() for the CGI scripts
 

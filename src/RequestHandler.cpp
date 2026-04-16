@@ -244,52 +244,41 @@ RequestHandler::putBinary(const HttpRequest &req, Client &client, const Resolved
 
 	Response::finalizeResponse(resp, req.getPath(), resp.body.length(), action.keep_alive); // todo
 
-	sendString(client_fd, Response::build(resp));
+	sendString(client, Response::build(resp));
 }
 
-void RequestHandler::handlePut(const HttpRequest &req, int client_fd, const ResolvedAction &action) const{
-	ResponseState status;
-	
+void RequestHandler::handlePut(const HttpRequest &req, Client &client, const ResolvedAction &action) const{
 	std::string contentType = req.getHeader("content-type");
 	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
-		putBinary(req, client_fd, action);
+		putBinary(req, client, action);
 	}
-	// TODO create response struct as well as response builder to keep DRY
-	//2) send response
 }
 
 void
-RequestHandler::sendDefaultError(int status_code, int client_fd) const{
-	ResponseState resp(status_code);
+RequestHandler::sendDefaultError(int error_code, Client &client) const{
+	ResponseState resp(error_code);
 
-	resp.body = generatePage(status_code, Response::getStatusText(status_code));
+	resp.body = generatePage(error_code, Response::getStatusText(error_code));
 	Response::finalizeResponse(resp, "", resp.body.length());
-	std::string toSend = Response::build(resp);
-
-	sendString(client_fd, toSend);
+	sendString(client, Response::build(resp));
 }
 
 void
-RequestHandler::sendDefaultError(const ResolvedAction &action, int client_fd) const{
+RequestHandler::sendDefaultError(const ResolvedAction &action, Client &client) const{
 	ResponseState resp(action.status_code);
-	
+
 	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
 	Response::finalizeResponse(resp, "", resp.body.length(), action.keep_alive);
-	std::string toSend = Response::build(resp);
-
-	sendString(client_fd, toSend);
+	sendString(client, Response::build(resp));
 }
 
 void
-RequestHandler::redirect(int client_fd, const ResolvedAction &action) const{
+RequestHandler::redirect(Client &client, const ResolvedAction &action) const{
 	ResponseState resp(action.status_code);
 
 	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
-
 	Response::finalizeResponse(resp, action.target_path, resp.body.length(), action.keep_alive);
-	std::string toSend = Response::build(resp);
-
-	sendString(client_fd, toSend);
+	sendString(client, Response::build(resp));
 }
 
 int

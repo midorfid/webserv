@@ -13,12 +13,12 @@ public:
     ParseConfig(const ParseConfig &other) = default;
     ParseConfig &operator=(const ParseConfig &other) = default;
 
-    void parse(const std::string &path, Config &config);
+    std::vector<Config> parse(const std::string &path);
 
 private:
     std::string _file_content; // Backing buffer to keep string_views valid
 
-    void parseServerBlock(TokenStream &tokens, Config &config);
+    Config parseServerBlock(TokenStream &tokens);
     void parseLocationBlock(TokenStream &tokens, Config &config);
     void parseLimitExceptBlock(TokenStream &tokens, Location &location);
     std::vector<std::string_view> collectArguments(TokenStream &tokens);

@@ -9,11 +9,6 @@ Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t 
 		resp.addHeader("connection", "keep-alive");
 	else
 		resp.addHeader("connection", "closed");
-	if (resp.cookies.size() > 0) {
-		for (std::vector<std::string>::const_iterator it = resp.cookies.begin(); it != resp.cookies.end(); ++it) {
-			resp.addHeader("set-cookie", *it);
-		}
-	}
     switch(resp.status_code) {
         case 201:
             resp.addHeader("location", path);
@@ -44,9 +39,10 @@ Response::build(const ResponseState &resp) {
 	
 	std::string status_text = Response::getStatusText(resp.status_code);
 	response << "HTTP/1.1 " << resp.status_code << " " << status_text << "\r\n";
-	for (std::vector<std::pair<std::string, std::string> >::const_iterator it = resp.headers.begin(); it != resp.headers.end(); ++it) {
-		response << it->first << ": " << it->second << "\r\n";
-	}
+	for (const auto &[key, val] : resp.headers)
+		response << key << ": " << val << "\r\n";
+	for (const auto &cookie : resp.cookies)
+		response << "Set-Cookie: " << cookie << "\r\n";
 	response << "\r\n";
 
 	if (!resp.body.empty())

@@ -10,7 +10,7 @@
 #define BUF_SIZE 4096
 #define MAX_HEADERS_SIZE 8192
 
-Client::Client() : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(-1), _response_offset(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
+Client::Client() : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(-1), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
 
 Client::~Client() {
 	if (_sock_fd != -1) {
@@ -58,8 +58,8 @@ Client::processNewData(Server &server) {
 					return status;
 				std::string len_str = _req.getHeader("content-length");
 				if (!len_str.empty()) {
-					int len = std::strtoul(len_str.c_str(), NULL, 10);
-					int max_body_size = server.getConfig().getMaxBodySize();
+					size_t len = std::strtoul(len_str.c_str(), NULL, 10);
+					size_t max_body_size = server.getConfig().getSharedCtx().client_max_body_size;
 					if (len > max_body_size)
 						return BodyTooLarge;
 				}
@@ -125,6 +125,7 @@ Client::reset() {
 	_last_activity = time(NULL);
 	_req_start_time = 0;
 	_cgi_state = CgiInfo(false);
+	resp_state = ResponseState();
 	_state = IDLE;
 	bytes_written_to_cgi = 0;
 	_response_queue.clear();
@@ -137,17 +138,12 @@ Client::isKeepAliveConn() const {
 }
 
 Client::Client(std::string &ip, std::string &port, int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE),
-		_ip_string(ip), _port(port), _sock_fd(sock_fd), _response_offset(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {
+		_ip_string(ip), _port(port), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {
 	logTime(REGLOG);
 	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
 }
 
-Client::Client(int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(sock_fd), _response_offset(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
-
-CgiInfo &
-Client::getCgi_state() {
-	return _cgi_state;
-}
+Client::Client(int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
 
 void Client::queueResponse(const std::string &response) {
 	_response_queue.append(response);

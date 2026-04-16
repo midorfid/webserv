@@ -17,13 +17,14 @@ std::vector<std::string>    StringUtils::split<char>(const std::string &s, char 
 template <>
 std::vector<std::string>    StringUtils::split<std::string>(const std::string &s, std::string delimiter) {
     std::vector<std::string>    tokens;
-    std::string                 token;
-    std::istringstream          tokenStream(s);
+    size_t                      start = 0;
+    size_t                      pos;
 
-    while (std::getline(tokenStream, token, delimiter)) {
-        tokens.push_back(token);
+    while ((pos = s.find(delimiter, start)) != std::string::npos) {
+        tokens.push_back(s.substr(start, pos - start));
+        start = pos + delimiter.length();
     }
-
+    tokens.push_back(s.substr(start));
     return tokens;
 }
 

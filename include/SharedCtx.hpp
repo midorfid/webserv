@@ -17,10 +17,13 @@ struct SharedContext {
     std::unordered_map<int, std::string> error_pages;
     std::optional<std::pair<int, std::string>> redirect;
 
+    std::vector<std::string> server_names;
+
     SharedContext()
         : root("/var/www/html"),
           autoindex(false),
           client_max_body_size(1048576),
+          _keepalive_timer(75),
           allow_cgi(false)
     {}
 };

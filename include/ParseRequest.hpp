@@ -4,7 +4,6 @@
 #include <map>
 #include "httpRequest.hpp"
 #include "Config.hpp"
-#include "AParser.hpp"
 
 enum ParseResult {
 	UrlTooLong,

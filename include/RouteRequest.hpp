@@ -26,6 +26,7 @@ struct ResolvedAction {
 	std::string			req_path; // for no slash redirect
 	int					status_code;
 	std::pair<int,int>	cgi_fds;
+	pid_t				child_pid;
 };
 
 class RouteRequest {

@@ -9,6 +9,21 @@
 #include <vector>
 #include <cerrno>
 
+const Location *
+RouteRequest::findBestLocationMatch(const Config &serv_cfg, std::string_view url) {
+    const Location *best = nullptr;
+    size_t          best_len = 0;
+
+    for (const auto &loc : serv_cfg.getLocations()) {
+        const std::string &path = loc.getPath();
+        if (url.substr(0, path.size()) == path && path.size() > best_len) {
+            best     = &loc;
+            best_len = path.size();
+        }
+    }
+    return best;
+}
+
 ResolvedAction	RouteRequest::resolveErrorAction(int error_code, const Config &serv_cfg, ResolvedAction &action) {
 	const auto &error_pages = serv_cfg.getSharedCtx().error_pages;
 	auto it = error_pages.find(error_code);
@@ -279,6 +294,7 @@ RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, c
 		action.status_code = 200;
 		action.cgi_fds.first = cgi_to_serv[0];
 		action.cgi_fds.second = serv_to_cgi[1];
+		action.child_pid = cpid;
 
 		return action;
 	}

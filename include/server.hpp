@@ -15,27 +15,32 @@ class Server {
         Server();
         ~Server();
 
-        Server(const Server &other);
-        Server &operator=(const Server &other);
+        Server(const Server &other) = delete;
+        Server &operator=(const Server &other) = delete;
 
         void    run(const std::string &cfg_file);
 
         std::map<int, std::unique_ptr<Client>>::iterator disconnect_client(std::map<int, std::unique_ptr<Client>>::iterator &it, int client_fd);
         void    		        				disconnect_client(int client_fd);
-        const std::string       				&port() const;
         std::pair<std::string, std::string>		getClientAddr(struct sockaddr_storage &client_addr);
 
         bool                                    epoll_add_cgi(std::pair<int, int> cgi_fds, int client_fd);
-        const Config                            &getConfig() const;
+        const Config                            &getConfig() const; // returns first vhost
+        const Config                            &selectVhost(int port, const std::string &host) const;
         static void                             handle_signal(int signum);
 
     private:
 
-        std::string                             _port;
-        int                                     _listen_sock;
         int                                     _epoll_fd;
         std::map<int, std::unique_ptr<Client>>  _clients;
-        Config                                  _config;
+
+        // Virtual hosting: one Config per server{} block
+        std::vector<Config>                     _vhosts;
+        // port → indices into _vhosts (first entry = default for that port)
+        std::map<int, std::vector<size_t>>      _port_to_vhost_idx;
+        // listen fd → port
+        std::map<int, int>                      _sock_to_port;
+
         ParseConfig				                _ConfigParser;
 		RouteRequest	                        _route_reslvr;
         RequestHandler                          _handler;
@@ -46,14 +51,13 @@ class Server {
         int                                     _signal_read_fd;
 
         void            cleanup();
-        void            disconnect_ifNoKeepAlive(Client &client, int client_fd);
         void            terminateConnWithError(int client_fd, int error_code);
         void            handleDefault(Client &client, int client_fd);
         void            handle_cgi_write(int pipe_fd);
-        void            handle_cgi_read(int pipe_fd);
+        void            handle_cgi_read(int &pipe_fd);
         std::string		generate_response(Client &client);
         void    		init_epoll(epoll_event *ev);
-        void    		init_sockets(const char *port);
+        int     		bind_port(int port); // binds port, returns listen fd
         void    		run_event_loop(epoll_event *ev);
         void    		hints_init(struct addrinfo *hints);
         void    		handle_new_connection();

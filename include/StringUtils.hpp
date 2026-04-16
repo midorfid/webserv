@@ -18,6 +18,8 @@ namespace StringUtils {
     std::vector<std::string>    split(const std::string &s, T delimiter);
 
     void		                trimLeftWhitespace(std::string &to_trim);
+    void		                trimRightWhitespace(std::string &to_trim);
+    void		                trimWhitespaces(std::string &to_trim);
 
     std::vector<std::string>    extractSubVecOfStr(const std::vector<std::string> &src);
     std::string                 myItoa(int input);
