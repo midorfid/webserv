@@ -17,6 +17,7 @@
 #include "StringUtils.hpp"
 
 #define SBUF 4096
+#define CHUNKED_THRESHOLD (64 * 1024)
 
 /*ERROR TEMPLATE*/
 // append static http version and error msg
@@ -51,14 +52,22 @@ RequestHandler::calculateTargetSize(const std::string &target_path) const{
 
 void			RequestHandler::sendFile(const ResolvedAction &action, Client &client) const{
 	long int file_size = calculateTargetSize(action.target_path);
-	
 	ResponseState res(action.status_code);
-	
-	Response::finalizeResponse(res, action.req_path, file_size, action.keep_alive);
 
-	const std::string response = Response::build(res);
-	sendString(client, response);
-	streamFileBody(client, action.target_path);
+	if (file_size > CHUNKED_THRESHOLD) {
+		int fd = open(action.target_path.c_str(), O_RDONLY);
+		if (fd == -1) {
+			sendDefaultError(action, client);
+			return;
+		}
+		Response::finalizeResponseChunked(res, action.req_path, action.keep_alive);
+		sendString(client, Response::build(res));
+		client.setStreamFd(fd);
+	} else {
+		Response::finalizeResponse(res, action.req_path, file_size, action.keep_alive);
+		sendString(client, Response::build(res));
+		streamFileBody(client, action.target_path);
+	}
 }
 
 int	handleOpenDirFail() {

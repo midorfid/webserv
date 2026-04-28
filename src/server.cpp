@@ -238,58 +238,101 @@ Server::handle_cgi_write(int write_fd) {
 	}
 }
 
-void
-Server::parseAndQoutputBuf(Client &client, int client_fd) {
-	std::string		&out_buf = client.cgi_state().output_buf;
-	ResponseState	&resp = client.resp_state;
-
-	size_t head_end = out_buf.find("\r\n\r\n");
-	if (head_end == std::string::npos) {
-		// CGI script produced no valid headers — send 502 Bad Gateway
-		terminateConnWithError(client_fd, 502);
-		return;
-	}
-
-	resp = ResponseState(200);  // reset and default to 200
-
+// Parse CGI response headers from out_buf[0..head_end] into resp.
+// Returns true if CGI set Content-Length.
+static bool parseCgiHeaders(const std::string &out_buf, size_t head_end, ResponseState &resp) {
 	std::string_view headers_view(out_buf.data(), head_end);
-	std::string      body = out_buf.substr(head_end + 4);
+	bool has_content_length = false;
+	size_t offset = 0;
 
-	size_t headers_offset = 0;
-
-	while (headers_offset < head_end) {
-		size_t end_line = headers_view.find("\r\n", headers_offset);
+	while (offset < head_end) {
+		size_t end_line = headers_view.find("\r\n", offset);
 		if (end_line == std::string_view::npos)
 			end_line = head_end;
 
-		std::string_view line = headers_view.substr(headers_offset, end_line - headers_offset);
+		std::string_view line = headers_view.substr(offset, end_line - offset);
 		size_t colon = line.find(':');
 
 		if (colon != std::string_view::npos) {
 			std::string key(line.substr(0, colon));
 			std::string val(line.substr(colon + 1));
-
 			StringUtils::trimWhitespaces(key);
 			StringUtils::trimWhitespaces(val);
-
-			for (auto &c : key)
-				c = std::tolower(static_cast<unsigned char>(c));
+			for (auto &c : key) c = std::tolower(static_cast<unsigned char>(c));
 
 			if (key == "status") {
-				try { resp.status_code = std::stoi(val); }
-				catch (...) {}
+				try { resp.status_code = std::stoi(val); } catch (...) {}
 			} else {
+				if (key == "content-length") has_content_length = true;
 				resp.addHeader(key, val);
 			}
 		}
-		headers_offset = (end_line >= head_end) ? head_end : end_line + 2;
+		offset = (end_line >= head_end) ? head_end : end_line + 2;
 	}
+	return has_content_length;
+}
 
-	Response::finalizeResponse(resp, client.req().getPath(), body.length(), client.isKeepAliveConn());
-	client.queueResponse(Response::build(resp) + body);
+// Called when headers boundary found mid-stream AND CGI gave no Content-Length.
+// Sends HTTP headers with Transfer-Encoding: chunked, queues any body received so far
+// as the first chunk, and arms the client fd for writing.
+void
+Server::startChunkedCgiStream(Client &client, int client_fd) {
+	std::string &out_buf = client.cgi_state().output_buf;
+	size_t head_end = out_buf.find("\r\n\r\n");
+
+	ResponseState resp(200);
+	parseCgiHeaders(out_buf, head_end, resp);
+
+	std::string body_so_far = out_buf.substr(head_end + 4);
+	out_buf.clear();
+
+	Response::finalizeResponseChunked(resp, client.req().getPath(), client.isKeepAliveConn());
+	std::string response = Response::build(resp);
+	if (!body_so_far.empty())
+		response += Response::encodeChunk(body_so_far);
+	client.queueResponse(response);
+
+	client.cgi_state().headers_sent = true;
+	client.cgi_state().is_chunked   = true;
 
 	struct epoll_event ev;
-	ev.events = EPOLLIN | EPOLLOUT;
+	ev.events  = EPOLLOUT;
+	ev.data.fd = client_fd;
+	epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+}
+
+// Called at pipe EOF for the two buffered cases:
+//   1. Headers never found mid-stream (!headers_sent) — full output in out_buf.
+//   2. Content-Length mode (headers_sent && !is_chunked) — full output in out_buf.
+void
+Server::parseAndQoutputBuf(Client &client, int client_fd) {
+	std::string &out_buf = client.cgi_state().output_buf;
+
+	size_t head_end = out_buf.find("\r\n\r\n");
+	if (head_end == std::string::npos) {
+		terminateConnWithError(client_fd, 502);
+		return;
+	}
+
+	ResponseState resp(200);
+	bool has_content_length = parseCgiHeaders(out_buf, head_end, resp);
+
+	std::string body = out_buf.substr(head_end + 4);
+	out_buf.clear();
+
+	if (has_content_length) {
+		// Trust CGI's Content-Length; finalizeResponse will overwrite with body.length()
+		// which equals the CGI value since we buffered to EOF.
+		Response::finalizeResponse(resp, client.req().getPath(), body.length(), client.isKeepAliveConn());
+		client.queueResponse(Response::build(resp) + body);
+	} else {
+		// No Content-Length: encode complete body as chunked
+		Response::finalizeResponseChunked(resp, client.req().getPath(), client.isKeepAliveConn());
+		client.queueResponse(Response::build(resp) + Response::encodeChunked(body));
+	}
+
+	struct epoll_event ev;
+	ev.events  = EPOLLIN | EPOLLOUT;
 	ev.data.fd = client_fd;
 	epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
 }
@@ -302,51 +345,79 @@ Server::handle_cgi_read(int &read_fd) {
 
 	auto client_it = _clients.find(client_fd);
 	if (client_it == _clients.end()) {
-		// Client was disconnected while CGI was running — clean up the orphaned pipe.
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
 		_cgi_client.erase(read_fd);
 		close(read_fd);
 		read_fd = -1;
 		return;
 	}
-	Client			&client = *client_it->second;
-	std::string		&out_buf = client.cgi_state().output_buf;
+	Client   &client = *client_it->second;
+	CgiInfo  &cgi    = client.cgi_state();
 
-	logTime(REGLOG);
-	std::cout << "cgi read_fd:" << read_fd << std::endl;
-	
-	char buf[4096];
-	ssize_t bytes_read = read(read_fd, buf, 4096);
-	
-	logTime(REGLOG);
-	std::cout << "bytes read: " << bytes_read << std::endl;
+	char    buf[4096];
+	ssize_t bytes_read = read(read_fd, buf, sizeof(buf));
+
 	if (bytes_read > 0) {
-		out_buf.append(buf, bytes_read);
+		if (!cgi.headers_sent) {
+			// Buffer until we have the full header block
+			cgi.output_buf.append(buf, bytes_read);
+			size_t head_end = cgi.output_buf.find("\r\n\r\n");
+			if (head_end == std::string::npos)
+				return; // need more data
+
+			// Headers complete — inspect for Content-Length
+			ResponseState probe(200);
+			bool has_cl = parseCgiHeaders(cgi.output_buf, head_end, probe);
+
+			if (has_cl) {
+				// Buffer everything; send at EOF so Content-Length is accurate
+				cgi.headers_sent = true;
+				cgi.is_chunked   = false;
+			} else {
+				// No Content-Length: start chunked streaming immediately
+				startChunkedCgiStream(client, client_fd);
+				// headers_sent = true, is_chunked = true set inside
+			}
+		} else if (cgi.is_chunked) {
+			// Streaming mode: forward each read as one chunk and wake the client fd
+			client.queueResponse(Response::encodeChunk(std::string(buf, bytes_read)));
+			struct epoll_event ev;
+			ev.events  = EPOLLOUT;
+			ev.data.fd = client_fd;
+			epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+		} else {
+			// Content-Length mode: keep buffering
+			cgi.output_buf.append(buf, bytes_read);
+		}
 	}
 	else if (bytes_read == 0) {
+		// Pipe EOF: clean up the read fd
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
 		_cgi_client.erase(read_fd);
 		close(read_fd);
-		client.cgi_state().read_fd = -1;  // must clear before parseAndQoutputBuf re-arms client fd
-		read_fd = -1;                      // also reset the event-loop variable
+		cgi.read_fd = -1;
+		read_fd     = -1;
 
-		pid_t &pid = client.cgi_state().child_pid;
-		if (pid != -1) {
-			waitpid(pid, NULL, WNOHANG);
-			pid = -1;
+		pid_t &pid = cgi.child_pid;
+		if (pid != -1) { waitpid(pid, NULL, WNOHANG); pid = -1; }
+
+		if (cgi.is_chunked) {
+			// Send terminal chunk; re-arm EPOLLOUT in case queue was drained
+			client.queueResponse("0\r\n\r\n");
+			struct epoll_event ev;
+			ev.events  = EPOLLOUT;
+			ev.data.fd = client_fd;
+			epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+		} else {
+			// Buffered case (no headers yet, or Content-Length): process full buffer
+			parseAndQoutputBuf(client, client_fd);
 		}
-
-		parseAndQoutputBuf(client, client_fd);
 	}
-	else /*(bytes_read == -1)*/ {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) {
-			// pipe full
+	else {
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			return;
-		}
-		else {
-			disconnectCgiFds(client);
-			terminateConnWithError(client_fd, 500);
-		}
+		disconnectCgiFds(client);
+		terminateConnWithError(client_fd, 500);
 	}
 }
 
@@ -604,15 +675,24 @@ Server::handle_client_event(int client_fd) {
 		Client &client = *_clients.at(client_fd);
 
 		if (client.getClientState() == WRITING_RESPONSE) {
-			// An event on the client fd while waiting for CGI output can only
-			// be EPOLLHUP/EPOLLERR (always delivered even with events=0).
-			// The browser closed the connection — kill the CGI and clean up.
-			if (client.cgi_state().isCgi()) {
+			// During chunked CGI streaming the client fd is armed with EPOLLOUT.
+			// If the CGI is still running but we have no queued data, the only
+			// possible event is EPOLLHUP — the browser closed the connection.
+			if (client.cgi_state().isCgi() && !client.hasQueuedResponse()) {
 				disconnect_client(client_fd);
 				return;
 			}
 			bool done = client.writeResponseChunk();
 			if (done) {
+				if (client.cgi_state().isCgi()) {
+					// Queue drained but CGI still running: disarm EPOLLOUT and wait
+					// for the next chunk. handle_cgi_read will re-arm when it queues one.
+					client.setWritingResponse();
+					struct epoll_event ev = {};
+					ev.data.fd = client_fd;
+					epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+					return;
+				}
 				if (client.isKeepAliveConn()) {
 					client.reset();
 					struct epoll_event ev;

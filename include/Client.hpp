@@ -48,6 +48,9 @@ class Client {
 	void				disableKeepAlive() { _last_activity = 0; }
 	void				queueResponse(const std::string &response);
 	bool				writeResponseChunk();
+	void				setStreamFd(int fd) { _stream_fd = fd; }
+	bool				hasQueuedResponse() const { return _response_offset < _response_queue.size(); }
+	void				setWritingResponse() { _state = WRITING_RESPONSE; }
 
 	int						bytes_written_to_cgi;
 	ResponseState			resp_state;
@@ -68,4 +71,10 @@ class Client {
         ParseRequest    _parser;
 		HttpRequest     _req;
 		CgiInfo			_cgi_state;
+
+		// chunked file streaming state
+		int				_stream_fd;
+		std::string		_chunk_buf;
+		size_t			_chunk_offset;
+		bool			_stream_done;
 };

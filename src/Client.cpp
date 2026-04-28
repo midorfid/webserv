@@ -5,17 +5,19 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cstring>
+#include <cstdio>
 #include "server.hpp"
 
 #define BUF_SIZE 4096
 #define MAX_HEADERS_SIZE 8192
 
-Client::Client() : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(-1), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
+Client::Client() : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(-1), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false), _stream_fd(-1), _chunk_offset(0), _stream_done(false) {}
 
 Client::~Client() {
-	if (_sock_fd != -1) {
+	if (_sock_fd != -1)
 		close(_sock_fd);
-	}
+	if (_stream_fd != -1)
+		close(_stream_fd);
 }
 
 const HttpRequest &
@@ -74,6 +76,11 @@ Client::processNewData(Server &server) {
 			}
 		}
 		if (getClientState() == READING_BODY) {
+			if (_req.getHeader("transfer-encoding") == "chunked") {
+				size_t max_body = server.getConfig().getSharedCtx().client_max_body_size;
+				if (_request_buffer.size() > max_body)
+					return BodyTooLarge;
+			}
 			ParseResult status = _parser.parseBody(_request_buffer, _req);
 			if (status == NothingToRead)
 				return NothingToRead;
@@ -132,6 +139,10 @@ Client::reset() {
 	bytes_written_to_cgi = 0;
 	_response_queue.clear();
 	_response_offset = 0;
+	if (_stream_fd != -1) { close(_stream_fd); _stream_fd = -1; }
+	_chunk_buf.clear();
+	_chunk_offset = 0;
+	_stream_done = false;
 }
 
 bool
@@ -140,12 +151,12 @@ Client::isKeepAliveConn() const {
 }
 
 Client::Client(std::string &ip, std::string &port, int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE),
-		_ip_string(ip), _port(port), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {
+		_ip_string(ip), _port(port), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false), _stream_fd(-1), _chunk_offset(0), _stream_done(false) {
 	logTime(REGLOG);
 	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
 }
 
-Client::Client(int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false) {}
+Client::Client(int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false), _stream_fd(-1), _chunk_offset(0), _stream_done(false) {}
 
 void Client::queueResponse(const std::string &response) {
 	_response_queue.append(response);
@@ -153,23 +164,66 @@ void Client::queueResponse(const std::string &response) {
 }
 
 bool Client::writeResponseChunk() {
-	if (_response_offset >= _response_queue.size()) return true;
-
-	size_t remaining = _response_queue.size() - _response_offset;
-	size_t chunk_size = std::min(remaining, static_cast<size_t>(8192)); // Strict 8KB limits
-
-	ssize_t sent = send(_sock_fd, _response_queue.data() + _response_offset, chunk_size, 0);
-	if (sent > 0) {
-		_response_offset += sent;
-		updateLastActivity();
-		if (_response_offset >= _response_queue.size()) {
+	// Phase 1: send buffered headers (and body for non-streaming responses)
+	if (_response_offset < _response_queue.size()) {
+		size_t remaining = _response_queue.size() - _response_offset;
+		size_t to_send = std::min(remaining, static_cast<size_t>(8192));
+		ssize_t sent = send(_sock_fd, _response_queue.data() + _response_offset, to_send, 0);
+		if (sent > 0) {
+			_response_offset += sent;
+			updateLastActivity();
+		} else if (sent == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+			throw std::runtime_error("Write error on client socket");
+		}
+		if (_response_offset < _response_queue.size())
+			return false;
+		// Buffer fully sent; done if no file streaming is active
+		if (_stream_fd == -1 && _chunk_buf.empty()) {
 			_state = DONE;
 			return true;
 		}
-	} else if (sent == -1) {
-		if (errno != EAGAIN && errno != EWOULDBLOCK) {
+		return false;
+	}
+
+	// Phase 2: chunked file streaming
+	// If no pending chunk, read the next block from the file
+	if (_chunk_buf.empty() && !_stream_done) {
+		char read_buf[8192];
+		ssize_t n = (_stream_fd != -1) ? read(_stream_fd, read_buf, sizeof(read_buf)) : 0;
+		if (n > 0) {
+			char hex[20];
+			snprintf(hex, sizeof(hex), "%zx\r\n", static_cast<size_t>(n));
+			_chunk_buf  = hex;
+			_chunk_buf.append(read_buf, n);
+			_chunk_buf += "\r\n";
+		} else {
+			// EOF or read error: close file and queue terminal chunk
+			if (_stream_fd != -1) { close(_stream_fd); _stream_fd = -1; }
+			_chunk_buf   = "0\r\n\r\n";
+			_stream_done = true;
+		}
+		_chunk_offset = 0;
+	}
+
+	// Send whatever is pending in _chunk_buf
+	if (!_chunk_buf.empty()) {
+		ssize_t sent = send(_sock_fd, _chunk_buf.data() + _chunk_offset,
+		                    _chunk_buf.size() - _chunk_offset, 0);
+		if (sent > 0) {
+			_chunk_offset += static_cast<size_t>(sent);
+			updateLastActivity();
+			if (_chunk_offset >= _chunk_buf.size()) {
+				_chunk_buf.clear();
+				_chunk_offset = 0;
+				if (_stream_done) {
+					_state = DONE;
+					return true;
+				}
+			}
+		} else if (sent == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
 			throw std::runtime_error("Write error on client socket");
 		}
 	}
+
 	return false;
 }

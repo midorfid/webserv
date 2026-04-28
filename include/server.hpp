@@ -68,4 +68,5 @@ class Server {
         void            checkTimeouts();
         void            disconnectCgiFds(Client &client);
         void            parseAndQoutputBuf(Client &client, int client_fd);
+        void            startChunkedCgiStream(Client &client, int client_fd);
 };

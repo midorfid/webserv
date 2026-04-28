@@ -1,4 +1,5 @@
 #include "response.hpp"
+#include <cstdio>
 
 void
 Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize, bool isConKeepAlive) {
@@ -68,6 +69,34 @@ Response::getStatusText(int code) {
 	case 204: return "No Content";
 	default: return "Error";
 	}
+}
+
+void
+Response::finalizeResponseChunked(ResponseState &resp, const std::string &path, bool isConKeepAlive) {
+    (void)path;
+    resp.addHeader("date", Response::getHttpDate());
+    resp.addHeader("server", "Webserv/ver 1.0");
+    resp.addHeader("transfer-encoding", "chunked");
+    if (isConKeepAlive)
+        resp.addHeader("connection", "keep-alive");
+    else
+        resp.addHeader("connection", "closed");
+}
+
+std::string
+Response::encodeChunk(const std::string &data) {
+    if (data.empty())
+        return "";
+    char hex[20];
+    snprintf(hex, sizeof(hex), "%zx\r\n", data.size());
+    return std::string(hex) + data + "\r\n";
+}
+
+std::string
+Response::encodeChunked(const std::string &body) {
+    if (body.empty())
+        return "0\r\n\r\n";
+    return Response::encodeChunk(body) + "0\r\n\r\n";
 }
 
 std::string

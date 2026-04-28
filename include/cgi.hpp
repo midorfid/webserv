@@ -7,6 +7,8 @@ struct CgiInfo {
     int             read_fd;
     pid_t           child_pid;
     std::string     output_buf;
+    bool            headers_sent; // headers parsed and forwarded to client
+    bool            is_chunked;   // response uses Transfer-Encoding: chunked
 
     explicit CgiInfo(bool = false) { reset(); }
 
@@ -23,9 +25,11 @@ struct CgiInfo {
     }
 
     void    reset() {
-        write_fd  = -1;
-        read_fd   = -1;
-        child_pid = -1;
+        write_fd     = -1;
+        read_fd      = -1;
+        child_pid    = -1;
+        headers_sent = false;
+        is_chunked   = false;
         output_buf.clear();
     }
 };
