@@ -136,14 +136,9 @@ std::string		RequestHandler::generatePage(int error_code, const std::string &tex
 }
 
 void			RequestHandler::sendDir(const ResolvedAction &action, Client &client, const std::string &logic_path) const{
-	long int dir_size = calculateTargetSize(action.target_path);
-
 	ResponseState state = createDirListHtml(action.target_path, logic_path);
-	
-	Response::finalizeResponse(state, logic_path, dir_size, action.keep_alive);
-	
-	const std::string resp = Response::build(state);
-	sendString(client, resp);
+	Response::finalizeResponse(state, logic_path, state.body.length(), action.keep_alive);
+	sendString(client, Response::build(state));
 }
 
 std::string

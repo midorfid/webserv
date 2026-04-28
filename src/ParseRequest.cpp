@@ -142,8 +142,8 @@ ParseResult	ParseRequest::parseBody(std::string_view reqOnlyBody, HttpRequest &r
     size_t body_size = 0;
     try { body_size = std::strtoul(req.getHeader("content-length").c_str(), NULL, 10); } catch(...) {}
     
-    if (reqOnlyBody.empty() && body_size > 0) return RequestIncomplete;
-    if (reqOnlyBody.empty()) return NothingToRead;
+    if (body_size == 0) return RequestComplete;
+    if (reqOnlyBody.empty()) return RequestIncomplete;
     
     if (body_size > 0 && reqOnlyBody.length() < body_size) {
         return RequestIncomplete; // Wait for full buffer to arrive

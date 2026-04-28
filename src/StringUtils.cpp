@@ -47,7 +47,7 @@ void		StringUtils::trimRightWhitespace(std::string &to_trim) {
 	if (start == to_trim.npos)
 		to_trim.clear();
 	else {
-		to_trim.erase(start);
+		to_trim.erase(start + 1);
 	}
 }
 

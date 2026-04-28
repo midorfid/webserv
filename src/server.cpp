@@ -189,34 +189,52 @@ Server::disconnectCgiFds(Client &client) {
 	}
 }
 
-void 
+static void close_cgi_write_fd(int epoll_fd, std::map<int, int> &cgi_client, CgiInfo &cgi, int write_fd) {
+	epoll_ctl(epoll_fd, EPOLL_CTL_DEL, write_fd, NULL);
+	cgi_client.erase(write_fd);
+	close(write_fd);
+	cgi.write_fd = -1;
+}
+
+void
 Server::handle_cgi_write(int write_fd) {
-	const int	&client_fd = _cgi_client[write_fd];
-	Client		&client = *_clients[client_fd]; 
+	auto cgi_it = _cgi_client.find(write_fd);
+	if (cgi_it == _cgi_client.end()) return;
+	int client_fd = cgi_it->second;
+
+	auto client_it = _clients.find(client_fd);
+	if (client_it == _clients.end()) {
+		// Client gone — clean up orphaned write pipe
+		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, write_fd, NULL);
+		_cgi_client.erase(write_fd);
+		close(write_fd);
+		return;
+	}
+	Client &client = *client_it->second;
 	const std::string &body = client.req().getBody();
-	int			remaining;
-	
+
 	logTime(REGLOG);
 	std::cout << "cgi write_fd:" << write_fd << std::endl;
 
-	remaining = body.length() - client.bytes_written_to_cgi;
+	size_t remaining = body.length() - static_cast<size_t>(client.bytes_written_to_cgi);
+
+	// No body to send (GET, HEAD, or fully written): signal EOF to the script
+	if (remaining == 0) {
+		close_cgi_write_fd(_epoll_fd, _cgi_client, client.cgi_state(), write_fd);
+		return;
+	}
+
 	ssize_t sent = write(write_fd, body.c_str() + client.bytes_written_to_cgi, remaining);
 	if (sent > 0) {
 		client.bytes_written_to_cgi += sent;
-		if (body.length() == static_cast<size_t>(client.bytes_written_to_cgi)) {
-			close(write_fd);
-			epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, NULL);
-		}
+		if (static_cast<size_t>(client.bytes_written_to_cgi) >= body.length())
+			close_cgi_write_fd(_epoll_fd, _cgi_client, client.cgi_state(), write_fd);
 	}
 	else if (sent == -1) {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) {
-			// pipe full
-			return;
-		}
-		else {
-			disconnectCgiFds(client);
-			terminateConnWithError(client_fd, 500);
-		}
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return; // pipe full, wait for next EPOLLOUT
+		disconnectCgiFds(client);
+		terminateConnWithError(client_fd, 500);
 	}
 }
 
@@ -226,8 +244,11 @@ Server::parseAndQoutputBuf(Client &client, int client_fd) {
 	ResponseState	&resp = client.resp_state;
 
 	size_t head_end = out_buf.find("\r\n\r\n");
-	if (head_end == std::string::npos)
+	if (head_end == std::string::npos) {
+		// CGI script produced no valid headers — send 502 Bad Gateway
+		terminateConnWithError(client_fd, 502);
 		return;
+	}
 
 	resp = ResponseState(200);  // reset and default to 200
 
@@ -275,8 +296,20 @@ Server::parseAndQoutputBuf(Client &client, int client_fd) {
 
 void
 Server::handle_cgi_read(int &read_fd) {
-	int				&client_fd = _cgi_client[read_fd];
-	Client			&client = *_clients[client_fd];
+	auto cgi_it = _cgi_client.find(read_fd);
+	if (cgi_it == _cgi_client.end()) return;
+	int client_fd = cgi_it->second;
+
+	auto client_it = _clients.find(client_fd);
+	if (client_it == _clients.end()) {
+		// Client was disconnected while CGI was running — clean up the orphaned pipe.
+		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
+		_cgi_client.erase(read_fd);
+		close(read_fd);
+		read_fd = -1;
+		return;
+	}
+	Client			&client = *client_it->second;
 	std::string		&out_buf = client.cgi_state().output_buf;
 
 	logTime(REGLOG);
@@ -291,10 +324,11 @@ Server::handle_cgi_read(int &read_fd) {
 		out_buf.append(buf, bytes_read);
 	}
 	else if (bytes_read == 0) {
-		close(read_fd);
-		_cgi_client.erase(read_fd);
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
-		read_fd = -1;
+		_cgi_client.erase(read_fd);
+		close(read_fd);
+		client.cgi_state().read_fd = -1;  // must clear before parseAndQoutputBuf re-arms client fd
+		read_fd = -1;                      // also reset the event-loop variable
 
 		pid_t &pid = client.cgi_state().child_pid;
 		if (pid != -1) {
@@ -326,20 +360,21 @@ Server::diffTime(const time_t &client_tm) {
 void	Server::checkTimeouts() {
 	for (auto it = _clients.begin(); it != _clients.end();) {
 		double quiet_time = diffTime(it->second->getLastActivity());
+		bool disconnected = false;
 
-		if (it->second->getClientState() != IDLE) {
-			if (quiet_time > 60) {
-				_handler.sendDefaultError(408, *it->second);
-				it = disconnect_client(it, it->first);
-			}
-		}
-		if (quiet_time > static_cast<double>(_vhosts.front().getKeepAliveTimer())) {
+		if (it->second->getClientState() != IDLE && quiet_time > 60) {
+			_handler.sendDefaultError(408, *it->second);
 			it = disconnect_client(it, it->first);
+			disconnected = true;
+		}
+		if (!disconnected) {
+			if (quiet_time > static_cast<double>(_vhosts.front().getKeepAliveTimer()))
+				it = disconnect_client(it, it->first);
+			else
+				++it;
 		}
 		if (_clients.empty())
 			break;
-		else
-			++it;
 	}
 }
 
@@ -416,11 +451,23 @@ void	Server::run_event_loop(epoll_event *ev) {
 				}
 			}
 			else if (_cgi_client.find(curr_fd) != _cgi_client.end()) {
-				if (events[i].events & EPOLLIN)
+				if (events[i].events & EPOLLIN) {
 					handle_cgi_read(curr_fd);
+				} else if (events[i].events & EPOLLHUP) {
+					// EPOLLHUP without EPOLLIN: two sub-cases:
+					//   read_fd: pipe empty and write-end closed → drain (bytes_read==0 = EOF)
+					//   write_fd: child closed its stdin → close our write end
+					int cgi_client_fd = _cgi_client.count(curr_fd) ? _cgi_client[curr_fd] : -1;
+					if (cgi_client_fd != -1 && _clients.count(cgi_client_fd)) {
+						CgiInfo &cgi = _clients[cgi_client_fd]->cgi_state();
+						if (cgi.read_fd == curr_fd)
+							handle_cgi_read(curr_fd);
+						else if (cgi.write_fd == curr_fd)
+							handle_cgi_write(curr_fd);
+					}
+				}
 				if (events[i].events & EPOLLOUT)
 					handle_cgi_write(curr_fd);
-				// clear?
 			}
 			else if (_clients.find(curr_fd) != _clients.end()){
 				handle_client_event(curr_fd); // add return value in case the client needs to be disconnected TODO
@@ -524,6 +571,12 @@ Server::handleDefault(Client &client, int client_fd) {
 
 	if (cgi.isCgi()) {
 		epoll_add_cgi(std::make_pair(cgi.getReadfd(), cgi.getWritefd()), client_fd);
+		// Disarm the client fd while waiting for CGI output so that a reload
+		// or peer-close doesn't trigger handle_client_event with an empty queue.
+		// parseAndQoutputBuf re-arms it with EPOLLIN|EPOLLOUT when done.
+		struct epoll_event ev = {};
+		ev.data.fd = client_fd;
+		epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
 	}
 	else {
 		struct epoll_event ev;
@@ -551,6 +604,13 @@ Server::handle_client_event(int client_fd) {
 		Client &client = *_clients.at(client_fd);
 
 		if (client.getClientState() == WRITING_RESPONSE) {
+			// An event on the client fd while waiting for CGI output can only
+			// be EPOLLHUP/EPOLLERR (always delivered even with events=0).
+			// The browser closed the connection — kill the CGI and clean up.
+			if (client.cgi_state().isCgi()) {
+				disconnect_client(client_fd);
+				return;
+			}
 			bool done = client.writeResponseChunk();
 			if (done) {
 				if (client.isKeepAliveConn()) {

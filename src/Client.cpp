@@ -40,8 +40,8 @@ Client::processNewData(Server &server) {
 			updateLastActivity();
 			_req_start_time = time(NULL);
 		}
-		_request_buffer.reserve(sizeof(temp_buf));
-		_request_buffer.append(temp_buf);
+		_request_buffer.reserve(_request_buffer.size() + bytes_read);
+		_request_buffer.append(temp_buf, bytes_read);
 		if (getClientState() == READING_HEADERS) {
 			size_t endofheaders = _request_buffer.find("\r\n\r\n");
 
@@ -91,8 +91,10 @@ Client::processNewData(Server &server) {
 		return NothingToRead;
 	}
 	else {
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return RequestIncomplete;
 		logTime(ERRLOG);
-		fprintf(stderr, "Client: %s port\n", strerror(errno));
+		fprintf(stderr, "Client recv: %s\n", strerror(errno));
 		return Error;
 	}
 	return Okay;

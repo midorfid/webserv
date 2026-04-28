@@ -37,22 +37,23 @@ Environment::build(const std::string &target_path) {
     _vsenv.reserve(dfl_size + _req.headers().size());
 
     append("REQUEST_METHOD", _req.getMethod());
-    if (_req.getQuery().size())
-        append("PATH_INFO", _req.getPath() + _req.getQuery());
-    else
-        append("PATH_INFO", _req.getPath());
+    append("PATH_INFO", _req.getPath());
     append("PATH_TRANSLATED", target_path);
-    append("REQUEST_PATH", _req.getPath());
-    append("REQUEST_QUERY", _req.getQuery());
+    append("SCRIPT_NAME", _req.getPath());
+    append("QUERY_STRING", _req.getQuery());
     append("SERVER_PROTOCOL", _req.getVersion());
-    // append("SCRIPT_NAME", _loc.) // redirect?
-    std::cout << "yoyoyoyo" << std::endl;
     try {
-       append("CONTENT_TYPE", _req.getHeader("content-type"));
+        const std::string &ct = _req.getHeader("content-type");
+        append("CONTENT_TYPE", ct);
+        // Bare MIME type without parameters (e.g. "text/plain" from "text/plain; charset=utf-8")
+        size_t semi = ct.find(';');
+        std::string mime = (semi != std::string::npos) ? ct.substr(0, semi) : ct;
+        size_t tail = mime.find_last_not_of(" \t");
+        if (tail != std::string::npos) mime.erase(tail + 1);
+        append("MIME_TYPE", mime);
     } catch (std::out_of_range &) {}
     try {
-        std::cout << "content-lenght:" << _req.getHeader("content-length") << std::endl;
-       append("CONTENT_LENGTH", _req.getHeader("content-length"));
+        append("CONTENT_LENGTH", _req.getHeader("content-length"));
     } catch (std::out_of_range &) {}
 
     append(_req.headers());

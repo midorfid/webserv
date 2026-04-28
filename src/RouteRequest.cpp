@@ -158,13 +158,20 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	action.keep_alive = false;
 	action.req_path = req_path;
 	action.type = ACTION_NONE;
-	
+
 	const Location *location = findBestLocationMatch(serv_cfg, req_path);
 	if (!location) {
+		if (req.isKeepAlive() && serv_cfg.getSharedCtx()._keepalive_timer > 0)
+			action.keep_alive = true;
 		return resolveErrorAction(404, serv_cfg, action);
 	}
 
 	const auto &ctx = location->getSharedCtx();
+
+	// Determine keep-alive BEFORE any early return so all response paths inherit it
+	if (req.isKeepAlive() && ctx._keepalive_timer > 0)
+		action.keep_alive = true;
+
 	if (ctx.redirect.has_value()) {
 		return resolveRedirect(ctx.redirect->second, action, ctx.redirect->first);
 	}
@@ -172,9 +179,6 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	if (!checkLimitExcept(req.getMethod(), *location)) {
 		return resolveErrorAction(405, serv_cfg, action);
 	}
-
-	if (req.isKeepAlive() && ctx._keepalive_timer > 0)
-		action.keep_alive = true;
 	
 	setActionType(action, req.getMethod());
 
