@@ -54,6 +54,7 @@ class Client {
 
 	int						bytes_written_to_cgi;
 	ResponseState			resp_state;
+	std::string				session_cookie; // Set-Cookie value stamped by Server::handleDefault
 	// create offset var for send
 	private:
 	

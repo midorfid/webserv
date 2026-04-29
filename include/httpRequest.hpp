@@ -18,6 +18,7 @@ class HttpRequest {
 		const std::string	&getQuery() const;
 		const std::string	&getBody() const;
 		std::string			getHeader(const std::string &key) const;
+		std::string			getCookie(const std::string &name) const;
 
 		const std::map<std::string, std::string>	&headers() const;
 
@@ -27,7 +28,8 @@ class HttpRequest {
 		void				setQuery(const std::string &query);	
 		void				setBody(const std::string &body);
 		void				appendBody(const std::string &extra_body);
-		void				addHeader(const std::string &key, const std::string &value);
+		// Returns false when a duplicate of a security-sensitive header is detected.
+		bool				addHeader(const std::string &key, const std::string &value);
 
 		bool				isKeepAlive() const;
 	private:

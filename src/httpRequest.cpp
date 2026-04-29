@@ -26,14 +26,23 @@ void	HttpRequest::setVersion(const std::string &version) { this->_http_ver = ver
 void	HttpRequest::setQuery(const std::string &query) { this->_query_str = query;}
 void	HttpRequest::setBody(const std::string &body) { this->_body = body;}
 void	HttpRequest::appendBody(const std::string &extra_body) { this->_body += extra_body;}
-void	HttpRequest::addHeader(const std::string &key, const std::string &value) {
-	std::map<std::string, std::string>::const_iterator	it;
+bool	HttpRequest::addHeader(const std::string &key, const std::string &value) {
+	// Duplicate any of these headers is either an HTTP smuggling vector or
+	// ambiguous enough that RFC 7230 §3.3.2 allows rejecting with 400.
+	static const std::string sensitive[] = {
+		"host", "content-length", "transfer-encoding", "content-type"
+	};
 
-	it = this->_headers.find(key);
-	if (it == this->_headers.end()) {
-		this->_headers[key] = value;
+	auto it = this->_headers.find(key);
+	if (it != this->_headers.end()) {
+		for (const auto &s : sensitive)
+			if (key == s) return false;
+		// Non-sensitive duplicate: fold per RFC 7230 §3.2.2 (comma-join)
+		it->second += ", " + value;
+		return true;
 	}
-	return;
+	this->_headers[key] = value;
+	return true;
 }
 
 HttpRequest::HttpRequest() : _method(""), _path(""), _query_str(""), _http_ver(""), _body(""), _headers() {}
@@ -54,6 +63,31 @@ HttpRequest &HttpRequest::operator=(const HttpRequest &other) {
 		this->_headers = other._headers;
 	}
 	return *this;
+}
+
+std::string HttpRequest::getCookie(const std::string &name) const {
+	const std::string raw = getHeader("cookie");
+	size_t pos = 0;
+	const size_t len = raw.size();
+
+	while (pos < len) {
+		while (pos < len && raw[pos] == ' ') ++pos;
+
+		size_t eq   = raw.find('=', pos);
+		size_t semi = raw.find(';', pos);
+		if (semi == std::string::npos) semi = len;
+
+		if (eq == std::string::npos || eq >= semi) { pos = semi + 1; continue; }
+
+		std::string_view key(raw.data() + pos, eq - pos);
+		while (!key.empty() && key.back() == ' ') key.remove_suffix(1);
+
+		if (key == name)
+			return raw.substr(eq + 1, semi - eq - 1);
+
+		pos = semi + 1;
+	}
+	return "";
 }
 
 const std::map<std::string, std::string>	&

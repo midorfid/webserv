@@ -9,9 +9,10 @@
 size_t Environment::_parent_env_size = 0;
 char **Environment::_parent_env = NULL;
 
-Environment::Environment(const HttpRequest &req, const Location &loc) :
+Environment::Environment(const HttpRequest &req, const Location &loc, const std::string &client_ip) :
     _req(req),
     _loc(loc),
+    _client_ip(client_ip),
     _cenv(NULL) {}
 
 Environment::~Environment() {
@@ -21,6 +22,7 @@ Environment::~Environment() {
 Environment::Environment(const Environment &other) :
     _req(other._req),
     _loc(other._loc),
+    _client_ip(other._client_ip),
     _cenv(NULL) // shallow copy
 { *this = other; }
 
@@ -42,6 +44,7 @@ Environment::build(const std::string &target_path) {
     append("SCRIPT_NAME", _req.getPath());
     append("QUERY_STRING", _req.getQuery());
     append("SERVER_PROTOCOL", _req.getVersion());
+    append("REMOTE_ADDR", _client_ip);
     try {
         const std::string &ct = _req.getHeader("content-type");
         append("CONTENT_TYPE", ct);

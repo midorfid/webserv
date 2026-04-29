@@ -71,8 +71,12 @@ Client::processNewData(Server &server) {
 				updateLastActivity();
 				_state = READING_BODY;
 				endofheaders = _request_buffer.find("\r\n\r\n");
-				
 				_request_buffer.erase(0, endofheaders + 4);
+
+				if (_req.getHeader("expect") == "100-continue") {
+					const char *cont = "HTTP/1.1 100 Continue\r\n\r\n";
+					send(_sock_fd, cont, 25, 0);
+				}
 			}
 		}
 		if (getClientState() == READING_BODY) {
@@ -100,8 +104,7 @@ Client::processNewData(Server &server) {
 	else {
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			return RequestIncomplete;
-		logTime(ERRLOG);
-		fprintf(stderr, "Client recv: %s\n", strerror(errno));
+		logTime(ERRLOG, std::string("Client recv: ") + strerror(errno));
 		return Error;
 	}
 	return Okay;
@@ -137,6 +140,7 @@ Client::reset() {
 	resp_state = ResponseState();
 	_state = IDLE;
 	bytes_written_to_cgi = 0;
+	session_cookie.clear();
 	_response_queue.clear();
 	_response_offset = 0;
 	if (_stream_fd != -1) { close(_stream_fd); _stream_fd = -1; }
@@ -151,10 +155,7 @@ Client::isKeepAliveConn() const {
 }
 
 Client::Client(std::string &ip, std::string &port, int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE),
-		_ip_string(ip), _port(port), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false), _stream_fd(-1), _chunk_offset(0), _stream_done(false) {
-	logTime(REGLOG);
-	std::cout << "CLient constructor, ip: " << _ip_string << ", port: " << _port << std::endl;
-}
+		_ip_string(ip), _port(port), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false), _stream_fd(-1), _chunk_offset(0), _stream_done(false) {}
 
 Client::Client(int sock_fd) : bytes_written_to_cgi(0), _req_start_time(0), _last_activity(time(NULL)), _state(IDLE), _sock_fd(sock_fd), _response_offset(0), _server_port(0), _request_buffer(""), _parser(), _req(), _cgi_state(false), _stream_fd(-1), _chunk_offset(0), _stream_done(false) {}
 

@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <string>
-#include <errno.h>
+#include <cerrno>
 #include <iostream>
 #include <map>
 #include "ParseConfig.hpp"
@@ -22,7 +22,8 @@
 #include <sys/wait.h>
 
 #define LISTEN_BACKLOG 50
-#define MAX_EVENTS 10
+#define MAX_EVENTS 64
+#define CGI_TIMEOUT 30  // seconds before a hanging CGI script is killed
 
 int Server::_signal_write_fd = -1;
 
@@ -40,23 +41,17 @@ void	Server::disconnect_client(int client_fd) {
 	auto it = _clients.find(client_fd);
 	if (it != _clients.end())
 		disconnectCgiFds(*it->second);
-	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL) == -1) {
-		logTime(ERRLOG);
-		fprintf(stderr, "epoll_ctl (DEL): %s\n", strerror(errno));
-	}
-	logTime(REGLOG);
+	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL) == -1)
+		logTime(ERRLOG, std::string("epoll_ctl (DEL): ") + strerror(errno));
+	logTime(REGLOG, "Client on fd " + std::to_string(client_fd) + " disconnected.");
 	_clients.erase(client_fd);
-	std::cout << "Client on fd " << client_fd << " disconnected." << std::endl;
 }
 
 std::map<int, std::unique_ptr<Client>>::iterator Server::disconnect_client(std::map<int, std::unique_ptr<Client>>::iterator &it, int client_fd) {
 	disconnectCgiFds(*it->second);
-	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL) == -1) {
-		logTime(ERRLOG);
-		fprintf(stderr, "epoll_ctl (DEL): %s\n", strerror(errno));
-	}
-	logTime(REGLOG);
-	std::cout << "Client on fd " << client_fd << " disconnected." << std::endl;
+	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL) == -1)
+		logTime(ERRLOG, std::string("epoll_ctl (DEL): ") + strerror(errno));
+	logTime(REGLOG, "Client on fd " + std::to_string(client_fd) + " disconnected.");
 	return	_clients.erase(it);
 }
 
@@ -65,8 +60,7 @@ void Server::run(const std::string &cfg_file) {
 
 	_vhosts = _ConfigParser.parse(cfg_file);
 	if (_vhosts.empty()) {
-		logTime(ERRLOG);
-		std::cerr << "Error: No server blocks in config." << std::endl;
+		logTime(ERRLOG, "Error: No server blocks in config.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -74,8 +68,7 @@ void Server::run(const std::string &cfg_file) {
 	for (size_t i = 0; i < _vhosts.size(); ++i) {
 		std::string port_str;
 		if (!_vhosts[i].getPort("", port_str)) {
-			logTime(ERRLOG);
-			std::cerr << "Error: server block " << i << " has no listen port." << std::endl;
+			logTime(ERRLOG, "Error: server block " + std::to_string(i) + " has no listen port.");
 			exit(EXIT_FAILURE);
 		}
 		int port = std::stoi(port_str);
@@ -86,13 +79,11 @@ void Server::run(const std::string &cfg_file) {
 		(void)indices;
 		int fd = bind_port(port);
 		if (listen(fd, LISTEN_BACKLOG) == -1) {
-			logTime(ERRLOG);
-			fprintf(stderr, "listen: %s\n", strerror(errno));
+			logTime(ERRLOG, std::string("listen: ") + strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 		_sock_to_port[fd] = port;
-		logTime(REGLOG);
-		std::cout << "Listening on port " << port << " (fd " << fd << ")" << std::endl;
+		logTime(REGLOG, "Listening on port " + std::to_string(port) + " (fd " + std::to_string(fd) + ")");
 	}
 
 	this->init_epoll(&ev);
@@ -108,8 +99,7 @@ int	Server::bind_port(int port) {
 	this->hints_init(&hints);
 	s = getaddrinfo(NULL, port_str.c_str(), &hints, &result);
 	if (s != 0) {
-		logTime(ERRLOG);
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
+		logTime(ERRLOG, std::string("getaddrinfo: ") + gai_strerror(s));
 		exit(EXIT_FAILURE);
 	}
 	optval_int = 1;
@@ -119,8 +109,7 @@ int	Server::bind_port(int port) {
 			continue;
 
 		if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &optval_int, sizeof(int)) == -1) {
-			logTime(ERRLOG);
-			fprintf(stderr, "setsockopt: %s\n", strerror(errno));
+			logTime(ERRLOG, std::string("setsockopt: ") + strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
@@ -133,8 +122,7 @@ int	Server::bind_port(int port) {
 	freeaddrinfo(result);
 
 	if (listen_fd == -1) {
-		logTime(ERRLOG);
-		fprintf(stderr, "Could not bind port %d\n", port);
+		logTime(ERRLOG, "Could not bind port " + std::to_string(port));
 		exit(EXIT_FAILURE);
 	}
 	return listen_fd;
@@ -143,8 +131,7 @@ int	Server::bind_port(int port) {
 void	Server::init_epoll(epoll_event *ev) {
 	this->_epoll_fd = epoll_create1(0);
 	if (this->_epoll_fd == -1) {
-		logTime(ERRLOG);
-		fprintf(stderr, "epoll_create1: %s\n", strerror(errno));
+		logTime(ERRLOG, std::string("epoll_create1: ") + strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 
@@ -153,15 +140,13 @@ void	Server::init_epoll(epoll_event *ev) {
 		(void)port;
 		ev->data.fd = fd;
 		if (epoll_ctl(this->_epoll_fd, EPOLL_CTL_ADD, fd, ev) == -1) {
-			logTime(ERRLOG);
-			fprintf(stderr, "epoll_ctl (listen fd %d): %s\n", fd, strerror(errno));
+			logTime(ERRLOG, "epoll_ctl (listen fd " + std::to_string(fd) + "): " + strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 	}
 	ev->data.fd = this->_signal_read_fd;
 	if (epoll_ctl(this->_epoll_fd, EPOLL_CTL_ADD, this->_signal_read_fd, ev) == -1) {
-		logTime(ERRLOG);
-		fprintf(stderr, "epoll_ctl: %s\n", strerror(errno));
+		logTime(ERRLOG, std::string("epoll_ctl: ") + strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 }
@@ -212,9 +197,6 @@ Server::handle_cgi_write(int write_fd) {
 	}
 	Client &client = *client_it->second;
 	const std::string &body = client.req().getBody();
-
-	logTime(REGLOG);
-	std::cout << "cgi write_fd:" << write_fd << std::endl;
 
 	size_t remaining = body.length() - static_cast<size_t>(client.bytes_written_to_cgi);
 
@@ -286,7 +268,7 @@ Server::startChunkedCgiStream(Client &client, int client_fd) {
 	std::string body_so_far = out_buf.substr(head_end + 4);
 	out_buf.clear();
 
-	Response::finalizeResponseChunked(resp, client.req().getPath(), client.isKeepAliveConn());
+	Response::finalizeResponseChunked(resp, client.req().getPath(), client.isKeepAliveConn(), client.session_cookie);
 	std::string response = Response::build(resp);
 	if (!body_so_far.empty())
 		response += Response::encodeChunk(body_so_far);
@@ -321,13 +303,10 @@ Server::parseAndQoutputBuf(Client &client, int client_fd) {
 	out_buf.clear();
 
 	if (has_content_length) {
-		// Trust CGI's Content-Length; finalizeResponse will overwrite with body.length()
-		// which equals the CGI value since we buffered to EOF.
-		Response::finalizeResponse(resp, client.req().getPath(), body.length(), client.isKeepAliveConn());
+		Response::finalizeResponse(resp, client.req().getPath(), body.length(), client.isKeepAliveConn(), client.session_cookie);
 		client.queueResponse(Response::build(resp) + body);
 	} else {
-		// No Content-Length: encode complete body as chunked
-		Response::finalizeResponseChunked(resp, client.req().getPath(), client.isKeepAliveConn());
+		Response::finalizeResponseChunked(resp, client.req().getPath(), client.isKeepAliveConn(), client.session_cookie);
 		client.queueResponse(Response::build(resp) + Response::encodeChunked(body));
 	}
 
@@ -338,7 +317,7 @@ Server::parseAndQoutputBuf(Client &client, int client_fd) {
 }
 
 void
-Server::handle_cgi_read(int &read_fd) {
+Server::handle_cgi_read(int read_fd) {
 	auto cgi_it = _cgi_client.find(read_fd);
 	if (cgi_it == _cgi_client.end()) return;
 	int client_fd = cgi_it->second;
@@ -348,76 +327,79 @@ Server::handle_cgi_read(int &read_fd) {
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
 		_cgi_client.erase(read_fd);
 		close(read_fd);
-		read_fd = -1;
 		return;
 	}
-	Client   &client = *client_it->second;
-	CgiInfo  &cgi    = client.cgi_state();
+	Client  &client = *client_it->second;
+	CgiInfo &cgi    = client.cgi_state();
 
-	char    buf[4096];
-	ssize_t bytes_read = read(read_fd, buf, sizeof(buf));
+	char buf[4096];
+	bool need_client_wake = false;
 
-	if (bytes_read > 0) {
-		if (!cgi.headers_sent) {
-			// Buffer until we have the full header block
-			cgi.output_buf.append(buf, bytes_read);
-			size_t head_end = cgi.output_buf.find("\r\n\r\n");
-			if (head_end == std::string::npos)
-				return; // need more data
+	// Drain the pipe in one shot rather than relying on repeated epoll wakeups.
+	// Each iteration reads up to 4 KiB; the loop exits on EAGAIN (no more data
+	// right now), EOF (child exited), or a hard read error.
+	while (true) {
+		ssize_t n = read(read_fd, buf, sizeof(buf));
 
-			// Headers complete — inspect for Content-Length
-			ResponseState probe(200);
-			bool has_cl = parseCgiHeaders(cgi.output_buf, head_end, probe);
+		if (n > 0) {
+			if (!cgi.headers_sent) {
+				cgi.output_buf.append(buf, n);
+				size_t head_end = cgi.output_buf.find("\r\n\r\n");
+				if (head_end == std::string::npos)
+					continue; // header block not yet complete — read more
 
-			if (has_cl) {
-				// Buffer everything; send at EOF so Content-Length is accurate
-				cgi.headers_sent = true;
-				cgi.is_chunked   = false;
+				ResponseState probe(200);
+				bool has_cl = parseCgiHeaders(cgi.output_buf, head_end, probe);
+				if (has_cl) {
+					cgi.headers_sent = true;
+					cgi.is_chunked   = false;
+				} else {
+					startChunkedCgiStream(client, client_fd);
+					// sets headers_sent=true, is_chunked=true; already arms EPOLLOUT
+				}
+			} else if (cgi.is_chunked) {
+				client.queueResponse(Response::encodeChunk(std::string(buf, n)));
+				need_client_wake = true;
 			} else {
-				// No Content-Length: start chunked streaming immediately
-				startChunkedCgiStream(client, client_fd);
-				// headers_sent = true, is_chunked = true set inside
+				cgi.output_buf.append(buf, n);
 			}
-		} else if (cgi.is_chunked) {
-			// Streaming mode: forward each read as one chunk and wake the client fd
-			client.queueResponse(Response::encodeChunk(std::string(buf, bytes_read)));
-			struct epoll_event ev;
-			ev.events  = EPOLLOUT;
-			ev.data.fd = client_fd;
-			epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
-		} else {
-			// Content-Length mode: keep buffering
-			cgi.output_buf.append(buf, bytes_read);
+		}
+		else if (n == 0) {
+			// Pipe EOF — child closed its stdout
+			epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
+			_cgi_client.erase(read_fd);
+			close(read_fd);
+			cgi.read_fd = -1;
+
+			pid_t &pid = cgi.child_pid;
+			if (pid != -1) {
+				pid_t reaped = waitpid(pid, NULL, WNOHANG);
+				if (reaped > 0 || reaped == -1)
+					pid = -1;
+			}
+
+			if (cgi.is_chunked) {
+				client.queueResponse("0\r\n\r\n");
+				need_client_wake = true;
+			} else {
+				parseAndQoutputBuf(client, client_fd); // arms client fd internally
+			}
+			break;
+		}
+		else {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				break; // pipe empty for now — epoll will wake us when there's more
+			disconnectCgiFds(client);
+			terminateConnWithError(client_fd, 500);
+			return; // client state is gone; skip the wake-up below
 		}
 	}
-	else if (bytes_read == 0) {
-		// Pipe EOF: clean up the read fd
-		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, read_fd, NULL);
-		_cgi_client.erase(read_fd);
-		close(read_fd);
-		cgi.read_fd = -1;
-		read_fd     = -1;
 
-		pid_t &pid = cgi.child_pid;
-		if (pid != -1) { waitpid(pid, NULL, WNOHANG); pid = -1; }
-
-		if (cgi.is_chunked) {
-			// Send terminal chunk; re-arm EPOLLOUT in case queue was drained
-			client.queueResponse("0\r\n\r\n");
-			struct epoll_event ev;
-			ev.events  = EPOLLOUT;
-			ev.data.fd = client_fd;
-			epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
-		} else {
-			// Buffered case (no headers yet, or Content-Length): process full buffer
-			parseAndQoutputBuf(client, client_fd);
-		}
-	}
-	else {
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return;
-		disconnectCgiFds(client);
-		terminateConnWithError(client_fd, 500);
+	if (need_client_wake) {
+		struct epoll_event ev;
+		ev.events  = EPOLLOUT;
+		ev.data.fd = client_fd;
+		epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
 	}
 }
 
@@ -429,18 +411,32 @@ Server::diffTime(const time_t &client_tm) {
 }
 
 void	Server::checkTimeouts() {
+	_sessions.purgeExpired();
 	for (auto it = _clients.begin(); it != _clients.end();) {
-		double quiet_time = diffTime(it->second->getLastActivity());
+		Client &client   = *it->second;
+		int     client_fd = it->first;
+
+		// Kill CGI scripts that exceed the hard timeout; reply 504 and keep
+		// the connection alive long enough to flush the error response.
+		if (client.cgi_state().isCgi() &&
+		    diffTime(client.cgi_state().cgi_start) > CGI_TIMEOUT) {
+			disconnectCgiFds(client);
+			terminateConnWithError(client_fd, 504);
+			++it;
+			continue;
+		}
+
+		double quiet_time = diffTime(client.getLastActivity());
 		bool disconnected = false;
 
-		if (it->second->getClientState() != IDLE && quiet_time > 60) {
-			_handler.sendDefaultError(408, *it->second);
-			it = disconnect_client(it, it->first);
+		if (client.getClientState() != IDLE && quiet_time > 60) {
+			_handler.sendDefaultError(408, client);
+			it = disconnect_client(it, client_fd);
 			disconnected = true;
 		}
 		if (!disconnected) {
 			if (quiet_time > static_cast<double>(_vhosts.front().getKeepAliveTimer()))
-				it = disconnect_client(it, it->first);
+				it = disconnect_client(it, client_fd);
 			else
 				++it;
 		}
@@ -450,8 +446,8 @@ void	Server::checkTimeouts() {
 }
 
 void
-Server::cleanup() { // here
-	std::cout << "cleanup" << std::endl;
+Server::cleanup() {
+	logTime(REGLOG, "Shutting down.");
 	this->~Server();
 	exit(EXIT_SUCCESS);
 }
@@ -471,14 +467,14 @@ void	Server::run_event_loop(epoll_event *ev) {
 	// std::map<int, Client>			clients;
 
 	signal(SIGINT, Server::handle_signal);
+	signal(SIGCHLD, SIG_IGN); // auto-reap children; prevents zombies if waitpid(WNOHANG) races
 
 	for (;;) {
 		nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, 1000);
 		if (nfds == -1) {
 			if (errno == EINTR)
 				continue;
-			logTime(ERRLOG);
-			fprintf(stderr, "epoll_wait: %s\n", strerror(errno));
+			logTime(ERRLOG, std::string("epoll_wait: ") + strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 		for (int i = 0; i < nfds; ++i) {
@@ -495,30 +491,26 @@ void	Server::run_event_loop(epoll_event *ev) {
 					if (errno == EAGAIN || errno == EWOULDBLOCK)
 						continue;
 					else {
-						logTime(ERRLOG);
-						fprintf(stderr, "accept: %s\n", strerror(errno));
+						logTime(ERRLOG, std::string("accept: ") + strerror(errno));
 						continue;
 					}
 				}
 				if (fcntl(conn_sock, F_SETFL, O_NONBLOCK) == -1) {
-					logTime(ERRLOG);
-					fprintf(stderr, "fcntl: %s\n", strerror(errno));
+					logTime(ERRLOG, std::string("fcntl: ") + strerror(errno));
 					close(conn_sock);
 					continue;
 				}
-				ev->events = EPOLLIN;
+				ev->events = EPOLLIN | EPOLLRDHUP;
 				ev->data.fd = conn_sock;
 				if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, conn_sock, ev) == -1) {
-					logTime(ERRLOG);
-					fprintf(stderr, "epoll_ctl (conn_sock): %s\n", strerror(errno));
+					logTime(ERRLOG, std::string("epoll_ctl (conn_sock): ") + strerror(errno));
 					close(conn_sock);
 				}
 				else {
 					std::pair<std::string, std::string> ipPort = getClientAddr(client_addr);
 					_clients[conn_sock] = std::make_unique<Client>(ipPort.first, ipPort.second, conn_sock);
 					_clients[conn_sock]->setServerPort(server_port);
-					logTime(REGLOG);
-					std::cout << "New connection on fd " << conn_sock << " (port " << server_port << ")" << std::endl;
+					logTime(REGLOG, "New connection on fd " + std::to_string(conn_sock) + " (port " + std::to_string(server_port) + ")");
 				}
 			}
 			else if (_cgi_client.find(curr_fd) != _cgi_client.end()) {
@@ -540,12 +532,21 @@ void	Server::run_event_loop(epoll_event *ev) {
 				if (events[i].events & EPOLLOUT)
 					handle_cgi_write(curr_fd);
 			}
-			else if (_clients.find(curr_fd) != _clients.end()){
-				handle_client_event(curr_fd); // add return value in case the client needs to be disconnected TODO
+			else if (_clients.find(curr_fd) != _clients.end()) {
+				uint32_t mask = events[i].events;
+				if (mask & (EPOLLERR | EPOLLHUP)) {
+					disconnect_client(curr_fd);
+				} else if (mask & EPOLLIN) {
+					// Handles EPOLLRDHUP+EPOLLIN too: recv()→0 → NothingToRead → disconnect
+					handle_client_read(curr_fd);
+				} else if (mask & EPOLLOUT) {
+					handle_client_write(curr_fd);
+				} else if (mask & EPOLLRDHUP) {
+					disconnect_client(curr_fd);
+				}
 			}
 			else {
-				logTime(ERRLOG);
-				std::cerr << "Received event on unknown fd.";
+				logTime(ERRLOG, "Received event on unknown fd.");
 				epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, curr_fd, NULL);
 				close(curr_fd);
 			}
@@ -563,8 +564,7 @@ Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
 	ev.data.fd = cgi_fds.first;
 
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_fds.first, &ev) == -1) {
-		logTime(ERRLOG);
-		fprintf(stderr, "epoll_ctl (cgi read sock): %s\n", strerror(errno));
+		logTime(ERRLOG, std::string("epoll_ctl (cgi read sock): ") + strerror(errno));
 		close(cgi_fds.first);
 		return false;
 	}
@@ -573,8 +573,7 @@ Server::epoll_add_cgi(std::pair<int,int> cgi_fds, int client_fd) {
 	ev.data.fd = cgi_fds.second;
 
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, cgi_fds.second, &ev) == -1) {
-		logTime(ERRLOG);
-		fprintf(stderr, "epoll_ctl (cgi write sock): %s\n", strerror(errno));
+		logTime(ERRLOG, std::string("epoll_ctl (cgi write sock): ") + strerror(errno));
 		close(cgi_fds.second);
 		return false;
 	}
@@ -610,18 +609,14 @@ Server::getClientAddr(struct sockaddr_storage &client_addr) {
 
 	if (sock_addr->sa_family == AF_INET) {
 		sockaddr_in *sa_in = reinterpret_cast<sockaddr_in*>(sock_addr);
-		if (inet_ntop(AF_INET, &sa_in->sin_addr, ip_cstr, sizeof(ip_cstr)) == NULL) {
-			logTime(ERRLOG);
-			std::cerr << "inet_ntop ipv4" << "\n";
-		}
+		if (inet_ntop(AF_INET, &sa_in->sin_addr, ip_cstr, sizeof(ip_cstr)) == NULL)
+			logTime(ERRLOG, "inet_ntop ipv4");
 		ipPort.second = std::to_string(ntohs(sa_in->sin_port));
 	}
 	else {
 		sockaddr_in6 *sa_in6 = reinterpret_cast<sockaddr_in6*>(sock_addr);
-		if (inet_ntop(AF_INET6, &sa_in6->sin6_addr, ip_cstr, sizeof(ip_cstr)) == NULL) {
-			logTime(ERRLOG);
-			std::cerr << "inet_ntop ipv6" << "\n";
-		}
+		if (inet_ntop(AF_INET6, &sa_in6->sin6_addr, ip_cstr, sizeof(ip_cstr)) == NULL)
+			logTime(ERRLOG, "inet_ntop ipv6");
 		ipPort.second = std::to_string(ntohs(sa_in6->sin6_port));
 	}
 	ipPort.first = ip_cstr;
@@ -634,6 +629,14 @@ Server::handleDefault(Client &client, int client_fd) {
 	const std::string host = client.req().getHeader("host");
 	const Config &config = selectVhost(client.getServerPort(), host);
 	ResolvedAction action = _route_reslvr.resolveRequestToHandler(config, client.req(), client.ip());
+
+	bool is_new = false;
+	std::string sid = _sessions.getOrCreate(client.req().getCookie("session_id"), is_new);
+	if (is_new)
+		client.session_cookie = "session_id=" + sid
+			+ "; HttpOnly; SameSite=Lax; Path=/; Max-Age="
+			+ std::to_string(SessionStore::TTL);
+
 	_handler.handle(client.req(), client, client.cgi_state(), action);
 
 	client.updateLastActivity();
@@ -670,66 +673,52 @@ Server::terminateConnWithError(int client_fd, int error_code) {
 }
 
 void
-Server::handle_client_event(int client_fd) {
+Server::handle_client_read(int client_fd) {
+	Client &client = *_clients.at(client_fd);
+
+	ParseResult status = client.processNewData(*this);
+	switch (status) {
+		case BadRequest:        return terminateConnWithError(client_fd, 400);
+		case UrlTooLong:        return terminateConnWithError(client_fd, 414);
+		case BodyTooLarge:      return terminateConnWithError(client_fd, 413);
+		case HeadersTooLarge:   return terminateConnWithError(client_fd, 431);
+		case RequestComplete:   return handleDefault(client, client_fd);
+		case RequestIncomplete: return;
+		case Error:
+		case NothingToRead:     return disconnect_client(client_fd);
+		default:                return;
+	}
+}
+
+void
+Server::handle_client_write(int client_fd) {
 	try {
 		Client &client = *_clients.at(client_fd);
 
-		if (client.getClientState() == WRITING_RESPONSE) {
-			// During chunked CGI streaming the client fd is armed with EPOLLOUT.
-			// If the CGI is still running but we have no queued data, the only
-			// possible event is EPOLLHUP — the browser closed the connection.
-			if (client.cgi_state().isCgi() && !client.hasQueuedResponse()) {
-				disconnect_client(client_fd);
-				return;
-			}
-			bool done = client.writeResponseChunk();
-			if (done) {
-				if (client.cgi_state().isCgi()) {
-					// Queue drained but CGI still running: disarm EPOLLOUT and wait
-					// for the next chunk. handle_cgi_read will re-arm when it queues one.
-					client.setWritingResponse();
-					struct epoll_event ev = {};
-					ev.data.fd = client_fd;
-					epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
-					return;
-				}
-				if (client.isKeepAliveConn()) {
-					client.reset();
-					struct epoll_event ev;
-					ev.events = EPOLLIN;
-					ev.data.fd = client_fd;
-					epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
-				} else {
-					disconnect_client(client_fd);
-				}
-			}
+		bool done = client.writeResponseChunk();
+		if (!done)
+			return;
+
+		if (client.cgi_state().isCgi()) {
+			// Queue drained but CGI pipe still open: disarm and wait for the
+			// next chunk. handle_cgi_read re-arms with EPOLLOUT when it queues one.
+			struct epoll_event ev = {};
+			ev.data.fd = client_fd;
+			epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
 			return;
 		}
-
-		ParseResult status = client.processNewData(*this);
-		switch (status) {
-			case UrlTooLong:
-				return terminateConnWithError(client_fd, 414);
-			case BodyTooLarge:
-				return terminateConnWithError(client_fd, 413);
-			case HeadersTooLarge:
-				return terminateConnWithError(client_fd, 431);
-			case RequestComplete:
-				return handleDefault(client, client_fd);
-			case RequestIncomplete:
-				return;
-			case Error:
-				return disconnect_client(client_fd);
-			case NothingToRead:
-				return disconnect_client(client_fd);
-			default:
-				return;
+		if (client.isKeepAliveConn()) {
+			client.reset();
+			struct epoll_event ev;
+			ev.events = EPOLLIN | EPOLLRDHUP;
+			ev.data.fd = client_fd;
+			epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+		} else {
+			disconnect_client(client_fd);
 		}
 	}
-	catch(const std::exception& e)
-	{
-		logTime(ERRLOG);
-		std::cerr << e.what() << '\n';
+	catch (const std::exception &e) {
+		logTime(ERRLOG, e.what());
 		disconnect_client(client_fd);
 	}
 }

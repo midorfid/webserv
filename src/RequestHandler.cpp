@@ -3,13 +3,12 @@
 #include <sys/stat.h>
 #include <ctime>
 #include <cstdlib>
-// #include <limits.bool	h(const Config &serv_cfg, const std::string &method, const std::string &client_ip) {}
 #include <sstream>
 #include <fstream>
 #include <dirent.h>
 #include <sys/socket.h>
 #include <iostream>
-#include <string.h>
+#include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
 #include "server.hpp"
@@ -60,11 +59,11 @@ void			RequestHandler::sendFile(const ResolvedAction &action, Client &client) co
 			sendDefaultError(action, client);
 			return;
 		}
-		Response::finalizeResponseChunked(res, action.req_path, action.keep_alive);
+		Response::finalizeResponseChunked(res, action.req_path, action.keep_alive, client.session_cookie);
 		sendString(client, Response::build(res));
 		client.setStreamFd(fd);
 	} else {
-		Response::finalizeResponse(res, action.req_path, file_size, action.keep_alive);
+		Response::finalizeResponse(res, action.req_path, file_size, action.keep_alive, client.session_cookie);
 		sendString(client, Response::build(res));
 		streamFileBody(client, action.target_path);
 	}
@@ -146,7 +145,7 @@ std::string		RequestHandler::generatePage(int error_code, const std::string &tex
 
 void			RequestHandler::sendDir(const ResolvedAction &action, Client &client, const std::string &logic_path) const{
 	ResponseState state = createDirListHtml(action.target_path, logic_path);
-	Response::finalizeResponse(state, logic_path, state.body.length(), action.keep_alive);
+	Response::finalizeResponse(state, logic_path, state.body.length(), action.keep_alive, client.session_cookie);
 	sendString(client, Response::build(state));
 }
 
@@ -246,8 +245,7 @@ RequestHandler::putBinary(const HttpRequest &req, Client &client, const Resolved
 		resp.body = "";
 	}
 
-	Response::finalizeResponse(resp, req.getPath(), resp.body.length(), action.keep_alive); // todo
-
+	Response::finalizeResponse(resp, req.getPath(), resp.body.length(), action.keep_alive, client.session_cookie);
 	sendString(client, Response::build(resp));
 }
 
@@ -256,6 +254,24 @@ void RequestHandler::handlePut(const HttpRequest &req, Client &client, const Res
 	if (contentType != "" && contentType.find("Multipart") == contentType.npos) {
 		putBinary(req, client, action);
 	}
+}
+
+void RequestHandler::handlePost(const HttpRequest &req, Client &client, const ResolvedAction &action) const {
+	std::string file_path = action.target_path;
+	struct stat info;
+
+	if (stat(file_path.c_str(), &info) == 0 && S_ISDIR(info.st_mode)) {
+		if (file_path.back() != '/') file_path += '/';
+		file_path += "upload_" + std::to_string(std::time(nullptr));
+		file_path += getExtensionFromMime(req.getHeader("content-type"));
+	}
+
+	int status_code = uploadFile(req, file_path);
+	ResponseState resp(status_code);
+	if (status_code >= 400)
+		resp.body = generatePage(status_code, Response::getStatusText(status_code));
+	Response::finalizeResponse(resp, req.getPath(), resp.body.length(), action.keep_alive, client.session_cookie);
+	sendString(client, Response::build(resp));
 }
 
 void
@@ -272,7 +288,7 @@ RequestHandler::sendDefaultError(const ResolvedAction &action, Client &client) c
 	ResponseState resp(action.status_code);
 
 	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
-	Response::finalizeResponse(resp, "", resp.body.length(), action.keep_alive);
+	Response::finalizeResponse(resp, "", resp.body.length(), action.keep_alive, client.session_cookie);
 	sendString(client, Response::build(resp));
 }
 
@@ -281,7 +297,7 @@ RequestHandler::redirect(Client &client, const ResolvedAction &action) const{
 	ResponseState resp(action.status_code);
 
 	resp.body = generatePage(action.status_code, Response::getStatusText(action.status_code));
-	Response::finalizeResponse(resp, action.target_path, resp.body.length(), action.keep_alive);
+	Response::finalizeResponse(resp, action.target_path, resp.body.length(), action.keep_alive, client.session_cookie);
 	sendString(client, Response::build(resp));
 }
 
@@ -316,10 +332,8 @@ RequestHandler::handleDelete(Client &client, const ResolvedAction &action) const
 
 	status_code = deleteFileElseError(action);
 	ResponseState resp(status_code);
-	Response::finalizeResponse(resp, action.req_path, resp.body.length(), action.keep_alive);
-
-	std::string toSend = Response::build(resp);
-	sendString(client, toSend);
+	Response::finalizeResponse(resp, action.req_path, resp.body.length(), action.keep_alive, client.session_cookie);
+	sendString(client, Response::build(resp));
 }
 
 void RequestHandler::handle(const HttpRequest &req, Client &client, CgiInfo &state, const ResolvedAction &action) const{
@@ -336,6 +350,8 @@ void RequestHandler::handle(const HttpRequest &req, Client &client, CgiInfo &sta
 			return redirect(client, action);
 		case ACTION_UPLOAD_FILE:
 			return handlePut(req, client, action);
+		case ACTION_POST_UPLOAD:
+			return handlePost(req, client, action);
 		case ACTION_DELETE_FILE:
 			return handleDelete(client, action);
 		default:

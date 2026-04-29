@@ -6,7 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <errno.h>
+#include <cerrno>
 #include <stdexcept>
 
 #include "log.hpp"
@@ -94,20 +94,20 @@ ParseConfig::parseLocationBlock(TokenStream &tokens, Config &config) {
 
 void
 ParseConfig::parseLimitExceptBlock(TokenStream &tokens, Location &location) {
-    std::vector<std::string> allowed_methods;
-    
-    // Parse methods before block opens (e.g. limit_except GET POST {)
+    int bitmask = 0;
+
+    // Consume method tokens before the block open: limit_except GET POST {
     while (tokens.hasNext() && tokens.peek() != "{") {
-        allowed_methods.push_back(std::string(tokens.next()));
+        bitmask |= StringUtils::stringToMethod(std::string(tokens.next()));
     }
-    
+
     tokens.expect("{");
     while (tokens.hasNext() && tokens.peek() != "}") {
-        tokens.next(); // Currently skip inner elements. Can parse inner rules here if needed.
+        tokens.next(); // inner deny/allow rules not yet implemented
     }
     tokens.expect("}");
-    
-    location.setLimitExcept(allowed_methods);
+
+    location.setLimitExcept(bitmask);
 }
 
 void

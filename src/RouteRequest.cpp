@@ -2,12 +2,14 @@
 #include "Environment.hpp"
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
+#include <cstring>
 #include "log.hpp"
 #include <string_view>
 #include <algorithm>
 #include <vector>
 #include <cerrno>
+#include <csignal>
+#include <sys/wait.h>
 
 const Location *
 RouteRequest::findBestLocationMatch(const Config &serv_cfg, std::string_view url) {
@@ -113,7 +115,7 @@ RouteRequest::resolveDeleteAction(ResolvedAction &action) {
 ResolvedAction	RouteRequest::checkReqPath(const Config &cfg, const Location *location, ResolvedAction &action) {
 	struct stat info;
 	
-	if (action.type == ACTION_UPLOAD_FILE)
+	if (action.type == ACTION_UPLOAD_FILE || action.type == ACTION_POST_UPLOAD)
 		return resolvePutUpload(action);
 	if (stat(action.target_path.c_str(), &info) != 0) {
 		switch(errno) {
@@ -140,18 +142,10 @@ ResolvedAction	RouteRequest::checkReqPath(const Config &cfg, const Location *loc
 bool RouteRequest::checkLimitExcept(const std::string &method, const Location &loc) {
 	const auto &limit_opt = loc.getLimitExcept();
 	if (!limit_opt.has_value()) return true;
-
-	HttpMethod req_met = StringUtils::stringToMethod(method);
-	int allowed_mask = 0;
-	
-	for (const auto &m : *limit_opt) {
-		allowed_mask |= StringUtils::stringToMethod(m);
-	}
-	return (req_met & allowed_mask) != 0;
+	return (StringUtils::stringToMethod(method) & *limit_opt) != 0;
 }
 
 ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req, const std::string &client_ip) {
-	(void)client_ip; // Dropped IP tracking arg for now
 	ResolvedAction			action;
 	const std::string		&req_path = req.getPath();
 	
@@ -182,7 +176,7 @@ ResolvedAction	RouteRequest::resolveRequestToHandler(const Config &serv_cfg, con
 	
 	setActionType(action, req.getMethod());
 
-	return PathFinder(req, *location, serv_cfg, action);
+	return PathFinder(req, *location, serv_cfg, action, client_ip);
 }
 
 void 
@@ -191,6 +185,8 @@ RouteRequest::setActionType(ResolvedAction &action, const std::string &met) {
 		action.type = ACTION_UPLOAD_FILE;
 	else if (met == "DELETE")
 		action.type = ACTION_DELETE_FILE;
+	else if (met == "POST")
+		action.type = ACTION_POST_UPLOAD;
 }
 
 std::string RouteRequest::catPathes(const std::string &reqPath, std::string &root_path, ActionType at) {
@@ -206,100 +202,96 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 		full_path = root_path + reqPath;
 	}
 
-	if (at != ACTION_UPLOAD_FILE && stat(full_path.c_str(), &info) != 0) {
-		logTime(ERRLOG);
-		std::cerr << "RouteRequest::catPathes() stat() failed :(" << std::endl;
-	}
+	if (at != ACTION_UPLOAD_FILE && stat(full_path.c_str(), &info) != 0)
+		logTime(ERRLOG, "catPathes stat failed: " + full_path);
 	return full_path;
 }
 
-ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, ResolvedAction &action) {
+ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, ResolvedAction &action, const std::string &client_ip) {
 	std::string root_path = loc.getSharedCtx().root;
 	if (root_path.empty()) root_path = serv_cfg.getSharedCtx().root;
-	
+
 	action.target_path = catPathes(req.getPath(), root_path, action.type);
-	
+
 	auto ends_with = [](std::string_view str, std::string_view suffix) {
 		return str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), std::string_view::npos, suffix) == 0;
 	};
 
 	if (loc.getSharedCtx().allow_cgi && (ends_with(action.target_path, ".py") || ends_with(action.target_path, ".cgi"))) {
-		return resolveCgiScript(serv_cfg, req, loc, action);
+		return resolveCgiScript(serv_cfg, req, loc, action, client_ip);
 	}
 
 	return checkReqPath(serv_cfg, &loc, action);
 }
 
 ResolvedAction
-RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const Location &loc, ResolvedAction &action) {
-	pid_t	cpid;
-	int		serv_to_cgi[2];
-	int		cgi_to_serv[2];
+RouteRequest::resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const Location &loc, ResolvedAction &action, const std::string &client_ip) {
+	int serv_to_cgi[2];
+	int cgi_to_serv[2];
 
-	if (pipe(serv_to_cgi) == -1 || pipe(cgi_to_serv) == -1) {
-		logTime(ERRLOG);
-		std::cerr << "pipe" << std::endl;
+	if (pipe(serv_to_cgi) == -1) {
+		logTime(ERRLOG, std::string("pipe(serv_to_cgi): ") + strerror(errno));
 		return resolveErrorAction(500, serv_cfg, action);
 	}
-	cpid = fork();
+	if (pipe(cgi_to_serv) == -1) {
+		logTime(ERRLOG, std::string("pipe(cgi_to_serv): ") + strerror(errno));
+		close(serv_to_cgi[0]); close(serv_to_cgi[1]);
+		return resolveErrorAction(500, serv_cfg, action);
+	}
+
+	pid_t cpid = fork();
 	if (cpid == -1) {
-		logTime(ERRLOG);
-		std::cerr << "fork" << std::endl;
+		logTime(ERRLOG, std::string("fork: ") + strerror(errno));
+		close(serv_to_cgi[0]); close(serv_to_cgi[1]);
+		close(cgi_to_serv[0]); close(cgi_to_serv[1]);
 		return resolveErrorAction(500, serv_cfg, action);
 	}
+
 	if (cpid == 0) {
+		// ── child ──────────────────────────────────────────────────────
 		close(cgi_to_serv[0]);
 		close(serv_to_cgi[1]);
 
-		if (dup2(serv_to_cgi[0], STDIN_FILENO) == -1) {
-			logTime(ERRLOG);
-			std::cerr << "dup2" << std::endl;
+		if (dup2(serv_to_cgi[0], STDIN_FILENO) == -1 ||
+		    dup2(cgi_to_serv[1], STDOUT_FILENO) == -1) {
+			perror("dup2");
 			exit(EXIT_FAILURE);
 		}
-		if (dup2(cgi_to_serv[1], STDOUT_FILENO) == -1) {
-			logTime(ERRLOG);
-			std::cerr << "dup2" << std::endl;
-			exit(EXIT_FAILURE);
-		}
-
-		close(cgi_to_serv[1]);
 		close(serv_to_cgi[0]);
+		close(cgi_to_serv[1]);
 
-		Environment	envp_builder(req, loc);
+		Environment envp_builder(req, loc, client_ip);
 		envp_builder.build(action.target_path);
 
-		std::string interp = "/usr/bin/python3";
-		std::string prog = action.target_path;
-
-		std::vector<char*> argv;
-		argv.push_back(const_cast<char*>(interp.c_str()));
-		argv.push_back(const_cast<char*>(prog.c_str()));
-		argv.push_back(nullptr);
-
-		logTime(REGLOG);
-		if (execve(interp.c_str(), argv.data(), envp_builder.getEnvp()) == -1) {
-			logTime(ERRLOG);
-			std::cerr << "execve error: " << strerror(errno) << std::endl;
-		}
+		const char *interp = "/usr/bin/python3";
+		char *argv[] = {
+			const_cast<char *>(interp),
+			const_cast<char *>(action.target_path.c_str()),
+			nullptr
+		};
+		execve(interp, argv, envp_builder.getEnvp());
+		perror("execve");
 		exit(EXIT_FAILURE);
 	}
-	else {
-		close(serv_to_cgi[0]);
-		close(cgi_to_serv[1]);
-		
-		if (fcntl(serv_to_cgi[1], F_SETFL, O_NONBLOCK) == -1 ||
-			fcntl(cgi_to_serv[0], F_SETFL, O_NONBLOCK) == -1) {
-				logTime(ERRLOG);
-				std::cerr << "fcntl" << std::endl;
-				return resolveErrorAction(500, serv_cfg, action);
-		}
-		
-		action.type = ACTION_CGI;
-		action.status_code = 200;
-		action.cgi_fds.first = cgi_to_serv[0];
-		action.cgi_fds.second = serv_to_cgi[1];
-		action.child_pid = cpid;
 
-		return action;
+	// ── parent ─────────────────────────────────────────────────────────
+	close(serv_to_cgi[0]);
+	close(cgi_to_serv[1]);
+
+	if (fcntl(serv_to_cgi[1], F_SETFL, O_NONBLOCK) == -1 ||
+	    fcntl(cgi_to_serv[0], F_SETFL, O_NONBLOCK) == -1) {
+		logTime(ERRLOG, std::string("fcntl: ") + strerror(errno));
+		close(serv_to_cgi[1]);
+		close(cgi_to_serv[0]);
+		kill(cpid, SIGKILL);
+		waitpid(cpid, nullptr, WNOHANG);
+		return resolveErrorAction(500, serv_cfg, action);
 	}
+
+	action.type            = ACTION_CGI;
+	action.status_code     = 200;
+	action.cgi_fds.first   = cgi_to_serv[0];   // server reads CGI stdout
+	action.cgi_fds.second  = serv_to_cgi[1];   // server writes CGI stdin
+	action.child_pid       = cpid;
+	return action;
 }

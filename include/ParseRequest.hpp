@@ -14,6 +14,7 @@ enum ParseResult {
 	Error,
 	NothingToRead,
 	Okay,
+	BadRequest,
 };
 
 class ParseRequest {
@@ -36,6 +37,6 @@ class ParseRequest {
 		void							parseMethod(std::string_view first_line, HttpRequest &req);
 		void							parsePathAndQuery(std::string_view line_remainder, HttpRequest &req);
 		void							parseHttpVer(std::string_view line_remainder, HttpRequest &req);
-		void							parseHeaders(std::string_view line, HttpRequest &req);
+		ParseResult						parseHeaders(std::string_view line, HttpRequest &req);
 		bool							hasUnderscore(std::string_view s) const;
 };	

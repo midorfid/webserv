@@ -2,7 +2,7 @@
 #include <cstdio>
 
 void
-Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize, bool isConKeepAlive) {
+Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize, bool isConKeepAlive, const std::string &session_cookie) {
 	resp.addHeader("date", Response::getHttpDate());
 	resp.addHeader("server", "Webserv/ver 1.0");
 	resp.addHeader("content-length", std::to_string(bodySize));
@@ -31,6 +31,8 @@ Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t 
         default:
             break;
     }
+	if (!session_cookie.empty())
+		resp.cookies.push_back(session_cookie);
 }
 
 
@@ -72,7 +74,7 @@ Response::getStatusText(int code) {
 }
 
 void
-Response::finalizeResponseChunked(ResponseState &resp, const std::string &path, bool isConKeepAlive) {
+Response::finalizeResponseChunked(ResponseState &resp, const std::string &path, bool isConKeepAlive, const std::string &session_cookie) {
     (void)path;
     resp.addHeader("date", Response::getHttpDate());
     resp.addHeader("server", "Webserv/ver 1.0");
@@ -81,6 +83,8 @@ Response::finalizeResponseChunked(ResponseState &resp, const std::string &path, 
         resp.addHeader("connection", "keep-alive");
     else
         resp.addHeader("connection", "closed");
+    if (!session_cookie.empty())
+        resp.cookies.push_back(session_cookie);
 }
 
 std::string

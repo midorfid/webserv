@@ -20,9 +20,12 @@ target_compile_options(${EXEC_NAME} PRIVATE -Wall -Wextra -Werror -g)
 
 add_custom_target(run
     COMMAND $<TARGET_FILE:${EXEC_NAME}> ${CONF_PATH} 2>> ${ERROR_LOG} 1>> ${ACCESS_LOG}
-
     DEPENDS ${EXEC_NAME}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     USES_TERMINAL
     COMMENT "Starting ${EXEC_NAME}..."
 )
+
+install(TARGETS ${EXEC_NAME} DESTINATION bin)
+install(FILES config/webserv.conf DESTINATION etc/webserv)
+install(DIRECTORY www/ DESTINATION var/www/html)

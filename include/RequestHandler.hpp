@@ -36,6 +36,7 @@ class RequestHandler {
 		int						executePut(const std::string &url_path, const HttpRequest &req, const std::string &req_path) const;
 		std::string				manageFileExtension(const HttpRequest &req, const std::string &phys_path) const;
 		void					handlePut(const HttpRequest &req, Client &client, const ResolvedAction &action) const;
+		void					handlePost(const HttpRequest &req, Client &client, const ResolvedAction &action) const;
 		void					handleDelete(Client &client, const ResolvedAction &action) const;
 		void					putBinary(const HttpRequest &req, Client &client, const ResolvedAction &action) const;
 		std::string				generatePage(int error_code, const std::string &text, const std::string &details = "") const;

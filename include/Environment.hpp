@@ -11,7 +11,7 @@ class HttpRequest;
 class Environment {
     public:
 
-        Environment(const HttpRequest &req, const Location &loc);
+        Environment(const HttpRequest &req, const Location &loc, const std::string &client_ip = "");
         ~Environment();
 
         Environment &operator=(const Environment &other);
@@ -34,6 +34,7 @@ class Environment {
 
         const HttpRequest           &_req;
         const Location				&_loc;
+        const std::string           _client_ip;
         std::vector<std::string>    _vsenv;
         char                        **_cenv;
 

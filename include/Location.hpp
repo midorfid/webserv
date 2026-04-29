@@ -15,14 +15,14 @@ public:
 
     void setSharedCtx(const SharedContext &ctx) { _shared_ctx = ctx; }
     void setPath(const std::string &path) { _path = path; }
-    void setLimitExcept(const std::vector<std::string> &methods) { _limit_except = methods; }
+    void setLimitExcept(int bitmask) { _limit_except = bitmask; }
 
     const std::string &getPath() const { return _path; }
     const SharedContext &getSharedCtx() const { return _shared_ctx; }
-    const std::optional<std::vector<std::string>> &getLimitExcept() const { return _limit_except; }
+    const std::optional<int> &getLimitExcept() const { return _limit_except; }
 
 private:
     std::string _path;
     SharedContext _shared_ctx;
-    std::optional<std::vector<std::string>> _limit_except;
+    std::optional<int> _limit_except;
 };

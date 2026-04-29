@@ -19,16 +19,7 @@ inline std::string getTime() {
     return std::string(buf);
 }
 /* @param logtype is either REGLOG or ERRLOG */
-inline void    logTime(int logtype) {
-    std::string curr_time = getTime();
-    switch(logtype) {
-        case REGLOG:
-            std::cout << '[' << curr_time << ']';
-            return;
-        case ERRLOG:
-            std::cerr << '[' << curr_time << ']';
-            return;
-        default:
-            return;
-    }
+inline void logTime(int logtype, const std::string &msg) {
+    std::ostream &out = (logtype == ERRLOG) ? std::cerr : std::cout;
+    out << '[' << getTime() << "] " << msg << '\n';
 }

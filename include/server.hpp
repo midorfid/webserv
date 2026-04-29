@@ -7,6 +7,7 @@
 #include "RequestHandler.hpp"
 #include "log.hpp"
 #include "RouteRequest.hpp"
+#include "Session.hpp"
 #include <memory>
 
 class Server {
@@ -45,6 +46,7 @@ class Server {
 		RouteRequest	                        _route_reslvr;
         RequestHandler                          _handler;
         std::map<int, int>                      _cgi_client;
+        SessionStore                            _sessions;
 
         static int                              _signal_write_fd;
 
@@ -54,14 +56,13 @@ class Server {
         void            terminateConnWithError(int client_fd, int error_code);
         void            handleDefault(Client &client, int client_fd);
         void            handle_cgi_write(int pipe_fd);
-        void            handle_cgi_read(int &pipe_fd);
+        void            handle_cgi_read(int pipe_fd);
         std::string		generate_response(Client &client);
         void    		init_epoll(epoll_event *ev);
         int     		bind_port(int port); // binds port, returns listen fd
         void    		run_event_loop(epoll_event *ev);
         void    		hints_init(struct addrinfo *hints);
         void    		handle_new_connection();
-        void    		handle_client_event(int client_fd);
 
         void            handleClientTimeout(int client_fd);
         double          diffTime(const time_t &client_tm);
@@ -69,4 +70,6 @@ class Server {
         void            disconnectCgiFds(Client &client);
         void            parseAndQoutputBuf(Client &client, int client_fd);
         void            startChunkedCgiStream(Client &client, int client_fd);
+        void            handle_client_read(int client_fd);
+        void            handle_client_write(int client_fd);
 };

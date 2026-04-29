@@ -34,8 +34,10 @@ struct ResponseState {
 
 namespace Response {
 	std::string		build(const ResponseState &resp);
-    void            finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize, bool isConKeepAlive = false);
-    void            finalizeResponseChunked(ResponseState &resp, const std::string &path, bool isConKeepAlive = false);
+    void            finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize,
+                                     bool isConKeepAlive = false, const std::string &session_cookie = "");
+    void            finalizeResponseChunked(ResponseState &resp, const std::string &path,
+                                            bool isConKeepAlive = false, const std::string &session_cookie = "");
     std::string     encodeChunked(const std::string &body);
     std::string     encodeChunk(const std::string &data); // one frame, no terminal chunk
 	std::string		getHttpDate();

@@ -3,12 +3,11 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
-#include <stdlib.h>
+#include <cstdlib>
 #include <sstream>
-#include <algorithm>
+#include <climits>
+#include <cstring>
 #include "log.hpp"
-#include <limits.h>
-#include <string.h>
 
 #define	EOL	"\r\n"
 #define	EOH	"\r\n\r\n"
@@ -78,7 +77,7 @@ bool	ParseRequest::hasUnderscore(std::string_view s) const {
 	return s.find('_') != std::string_view::npos;
 }
 
-void		ParseRequest::parseHeaders(std::string_view request, HttpRequest &req) {
+ParseResult		ParseRequest::parseHeaders(std::string_view request, HttpRequest &req) {
 	while(!request.empty()) {
 		std::string_view header_line = getNextLine(request);
 		if (header_line.empty())
@@ -92,8 +91,10 @@ void		ParseRequest::parseHeaders(std::string_view request, HttpRequest &req) {
 		std::string key(trimWhitespacesSV(key_view));
 		std::transform(key.begin(), key.end(), key.begin(), ::tolower);
 		std::string value(trimWhitespacesSV(header_line.substr(delim_pos + 1)));
-		req.addHeader(key, value);
+		if (!req.addHeader(key, value))
+			return BadRequest;
 	}
+	return Okay;
 }
 
 ParseResult		ParseRequest::parseFirstLine(std::string_view _current_line, HttpRequest &req) {
@@ -154,38 +155,6 @@ ParseResult	ParseRequest::parseBody(std::string_view reqOnlyBody, HttpRequest &r
 	return RequestComplete;
 }
 
-std::string	normalizePath(const std::string &req_path) {
-	std::vector<std::string>	stack;
-	std::stringstream			ss(req_path);
-	std::string					token;
-
-	std::cout << req_path << std::endl;
-	if (req_path == "/")
-		return req_path;
-	while (std::getline(ss, token, '/')) {
-		if (token == "." || token == "") {
-			continue;
-		}
-		if (token == "..") {
-			if (stack.empty()) {
-				continue;
-			}
-			stack.pop_back();
-		}
-		else
-			stack.push_back(token);
-	}
-	std::string norm_path = "";
-	if (req_path[0] == '/') norm_path = "/";
-
-	for (size_t i = 0; i < stack.size(); ++i) {
-		norm_path += stack[i];
-		if (i < stack.size() - 1)
-			norm_path += '/';
-	}
-
-	return norm_path;
-}
 
 ParseResult ParseRequest::parseReqLineHeaders(std::string_view reqNoBody, HttpRequest &req) {
 	std::string_view		_current_line;
@@ -194,10 +163,7 @@ ParseResult ParseRequest::parseReqLineHeaders(std::string_view reqNoBody, HttpRe
 	_current_line = getNextLine(reqNoBody);
 	if (parseFirstLine(_current_line, req) == UrlTooLong)
 		return UrlTooLong;
-	
-	parseHeaders(reqNoBody, req);
-	// req.setPath(normalizePath(req.getPath()));
-	return Okay;
+	return parseHeaders(reqNoBody, req);
 }
 
 ParseRequest::ParseRequest() {}
