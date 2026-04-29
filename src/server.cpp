@@ -678,10 +678,11 @@ Server::handle_client_read(int client_fd) {
 
 	ParseResult status = client.processNewData(*this);
 	switch (status) {
-		case BadRequest:        return terminateConnWithError(client_fd, 400);
-		case UrlTooLong:        return terminateConnWithError(client_fd, 414);
-		case BodyTooLarge:      return terminateConnWithError(client_fd, 413);
-		case HeadersTooLarge:   return terminateConnWithError(client_fd, 431);
+		case BadRequest:          return terminateConnWithError(client_fd, 400);
+		case UrlTooLong:          return terminateConnWithError(client_fd, 414);
+		case BodyTooLarge:        return terminateConnWithError(client_fd, 413);
+		case HeadersTooLarge:     return terminateConnWithError(client_fd, 431);
+		case UnsupportedVersion:  return terminateConnWithError(client_fd, 505);
 		case RequestComplete:   return handleDefault(client, client_fd);
 		case RequestIncomplete: return;
 		case Error:

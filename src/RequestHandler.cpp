@@ -14,12 +14,6 @@
 #include "server.hpp"
 #include "Environment.hpp"
 #include "StringUtils.hpp"
-
-#define SBUF 4096
-#define CHUNKED_THRESHOLD (64 * 1024)
-
-/*ERROR TEMPLATE*/
-// append static http version and error msg
 // calculate time
 // static webserv/version
 // content-length size/len of the file
@@ -31,15 +25,6 @@ void	RequestHandler::sendString(Client &client, const std::string &response) con
 	client.queueResponse(response);
 }
 
-void	RequestHandler::streamFileBody(Client &client, const std::string &file_path) const{
-	std::ifstream	file(file_path.c_str(), std::ios::binary);
-
-	if (file) {
-		std::stringstream buffer;
-		buffer << file.rdbuf();
-		client.queueResponse(buffer.str());
-	}
-}
 
 off_t
 RequestHandler::calculateTargetSize(const std::string &target_path) const{
@@ -50,23 +35,22 @@ RequestHandler::calculateTargetSize(const std::string &target_path) const{
 }
 
 void			RequestHandler::sendFile(const ResolvedAction &action, Client &client) const{
-	long int file_size = calculateTargetSize(action.target_path);
-	ResponseState res(action.status_code);
-
-	if (file_size > CHUNKED_THRESHOLD) {
-		int fd = open(action.target_path.c_str(), O_RDONLY);
-		if (fd == -1) {
-			sendDefaultError(action, client);
-			return;
-		}
-		Response::finalizeResponseChunked(res, action.req_path, action.keep_alive, client.session_cookie);
-		sendString(client, Response::build(res));
-		client.setStreamFd(fd);
-	} else {
-		Response::finalizeResponse(res, action.req_path, file_size, action.keep_alive, client.session_cookie);
-		sendString(client, Response::build(res));
-		streamFileBody(client, action.target_path);
+	int fd = open(action.target_path.c_str(), O_RDONLY);
+	if (fd == -1) {
+		sendDefaultError(action, client);
+		return;
 	}
+	struct stat st;
+	if (fstat(fd, &st) == -1) {
+		close(fd);
+		sendDefaultError(action, client);
+		return;
+	}
+	ResponseState res(action.status_code);
+	res.addHeader("content-type", Response::mimeFromPath(action.target_path));
+	Response::finalizeResponse(res, action.req_path, static_cast<size_t>(st.st_size), action.keep_alive, client.session_cookie);
+	sendString(client, Response::build(res));
+	client.setStreamFd(fd, st.st_size);
 }
 
 int	handleOpenDirFail() {

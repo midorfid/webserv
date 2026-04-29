@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Upload — webserv</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav>
+    <a href="/" class="brand">&#9670; webserv</a>
+    <a href="/">Home</a>
+    <a href="/upload.html" class="active">Upload</a>
+    <a href="/login.html">Login</a>
+    <a href="/cgi/stream.py">Stream</a>
+  </nav>
+
+  <main>
+    <h1>File Upload Test</h1>
+    <p>Upload any file to verify <code>multipart/form-data</code> POST parsing and disk persistence.</p>
+
+    <div class="card">
+      <h2>Choose a File</h2>
+      <form method="POST" action="/cgi/upload.py" enctype="multipart/form-data">
+        <div class="form-group">
+          <label for="file">File</label>
+          <input type="file" id="file" name="file" required>
+        </div>
+        <div class="form-group">
+          <label for="desc">Description (optional)</label>
+          <input type="text" id="desc" name="description" placeholder="What are you uploading?">
+        </div>
+        <button type="submit" class="btn">Upload</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Uploaded Files</h2>
+      <p>Files saved to <code>/uploads/</code> on the server. Browse them via autoindex:</p>
+      <a class="btn btn-outline" href="/uploads">Browse /uploads</a>
+    </div>
+  </main>
+</body>
+</html>

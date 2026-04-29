@@ -106,6 +106,8 @@ ParseResult		ParseRequest::parseFirstLine(std::string_view _current_line, HttpRe
 	if (first_line[1].length() > MAX_URL_LENGTH)
 		return UrlTooLong;
 	parsePathAndQuery(first_line[1], req);
+	if (first_line[2] != "HTTP/1.0" && first_line[2] != "HTTP/1.1")
+		return UnsupportedVersion;
 	parseHttpVer(first_line[2], req);
 	return Okay;
 }
@@ -161,8 +163,8 @@ ParseResult ParseRequest::parseReqLineHeaders(std::string_view reqNoBody, HttpRe
 
 	
 	_current_line = getNextLine(reqNoBody);
-	if (parseFirstLine(_current_line, req) == UrlTooLong)
-		return UrlTooLong;
+	ParseResult r = parseFirstLine(_current_line, req);
+	if (r != Okay) return r;
 	return parseHeaders(reqNoBody, req);
 }
 

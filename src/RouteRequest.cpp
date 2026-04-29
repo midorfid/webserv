@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
+#include <cstdlib>
+#include <climits>
 #include "log.hpp"
 #include <string_view>
 #include <algorithm>
@@ -86,7 +88,7 @@ ResolvedAction RouteRequest::resolveRedirect(const std::string &dir_path, Resolv
 
 ResolvedAction RouteRequest::resolveDirAction(const std::string &dir_path, const Config &cfg,
 												const Location *location, ResolvedAction &action) {
-	if (NoSlash(dir_path))
+	if (NoSlash(action.req_path))
 		return resolveRedirect(action.req_path + '/', action);
 
 	const auto &loc_ctx = location->getSharedCtx();
@@ -131,6 +133,8 @@ ResolvedAction	RouteRequest::checkReqPath(const Config &cfg, const Location *loc
 		return resolveDeleteAction(action);
 
 	if (S_ISDIR(info.st_mode)) {
+		if (action.target_path.back() != '/')
+			action.target_path += '/';
 		return resolveDirAction(action.target_path, cfg, location, action);
 	}
 	else if (S_ISREG(info.st_mode)) {
@@ -202,16 +206,39 @@ std::string RouteRequest::catPathes(const std::string &reqPath, std::string &roo
 		full_path = root_path + reqPath;
 	}
 
-	if (at != ACTION_UPLOAD_FILE && stat(full_path.c_str(), &info) != 0)
+	if (at != ACTION_UPLOAD_FILE && at != ACTION_POST_UPLOAD && stat(full_path.c_str(), &info) != 0)
 		logTime(ERRLOG, "catPathes stat failed: " + full_path);
 	return full_path;
+}
+
+static bool isUnderRoot(const std::string &target, const std::string &canonical_root) {
+	// canonical_root must end with '/'
+	return (target + '/').substr(0, canonical_root.size()) == canonical_root;
 }
 
 ResolvedAction	RouteRequest::PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, ResolvedAction &action, const std::string &client_ip) {
 	std::string root_path = loc.getSharedCtx().root;
 	if (root_path.empty()) root_path = serv_cfg.getSharedCtx().root;
+	if (root_path.back() != '/') root_path += '/';
 
 	action.target_path = catPathes(req.getPath(), root_path, action.type);
+
+	// Traversal guard: resolve symlinks and verify the path stays under root
+	if (action.type != ACTION_UPLOAD_FILE && action.type != ACTION_POST_UPLOAD) {
+		char resolved[PATH_MAX];
+		if (realpath(action.target_path.c_str(), resolved)) {
+			if (!isUnderRoot(resolved, root_path))
+				return resolveErrorAction(403, serv_cfg, action);
+			action.target_path = resolved;
+		}
+		// ENOENT → leave path as-is; checkReqPath will return 404
+	} else {
+		// For uploads the file doesn't exist yet; check the parent dir instead
+		std::string parent = action.target_path.substr(0, action.target_path.rfind('/'));
+		char resolved[PATH_MAX];
+		if (realpath(parent.c_str(), resolved) && !isUnderRoot(resolved, root_path))
+			return resolveErrorAction(403, serv_cfg, action);
+	}
 
 	auto ends_with = [](std::string_view str, std::string_view suffix) {
 		return str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), std::string_view::npos, suffix) == 0;

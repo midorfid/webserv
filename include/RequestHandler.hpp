@@ -25,7 +25,6 @@ class RequestHandler {
 
 		void				redirect(Client &client, const ResolvedAction &action) const;
 		void				sendString(Client &client, const std::string &response) const;
-		void				streamFileBody(Client &client, const std::string &file_path) const;
 								
 		std::string			genAutoindexAction(const ResolvedAction &action) const;
 		ResponseState		createDirListHtml(const std::string &physical_path, const std::string &logic_path) const;

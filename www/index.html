@@ -1,38 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>My WebServ Test</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .container {
-            text-align: center;
-            background-color: #ffffff;
-            padding: 2em;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-        }
-        p {
-            color: #555;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>webserv — C++ HTTP/1.1 Demo</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>🎉 Success! 🎉</h1>
-        <p>If you are seeing this page, your Webserv is working correctly!</p>
-        <p>Hello from Kraków! 🐲</p>
+  <nav>
+    <a href="/" class="brand">&#9670; webserv</a>
+    <a href="/" class="active">Home</a>
+    <a href="/upload.html">Upload</a>
+    <a href="/login.html">Login</a>
+    <a href="/cgi/stream.py">Stream</a>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <h1>Custom C++ Web Server</h1>
+      <p>HTTP/1.1 &middot; <code>epoll</code> event loop &middot; CGI/1.1 &middot; Chunked Transfer &middot; Sessions &amp; Cookies</p>
     </div>
+
+    <div class="card">
+      <h2>Feature Showcase</h2>
+      <p>Each card below exercises a distinct capability of the server. Click one to run the test.</p>
+
+      <div class="card-grid">
+        <a class="feature-card" href="/upload.html">
+          <div class="icon">&#128229;</div>
+          <h3>File Upload</h3>
+          <p>Tests <code>multipart/form-data</code> POST handling and file persistence on disk.</p>
+        </a>
+
+        <a class="feature-card" href="/login.html">
+          <div class="icon">&#128274;</div>
+          <h3>Auth &amp; Sessions</h3>
+          <p>Login with a username/password. Server sets a <code>Set-Cookie</code> header and tracks sessions via a JSON store.</p>
+        </a>
+
+        <a class="feature-card" href="/cgi/stream.py">
+          <div class="icon">&#128311;</div>
+          <h3>Chunked Stream <span class="badge">live</span></h3>
+          <p>A CGI script that streams 5 chunks with 1-second delays, proving <code>Transfer-Encoding: chunked</code>.</p>
+        </a>
+
+        <a class="feature-card" href="/kapouet">
+          <div class="icon">&#128193;</div>
+          <h3>Directory Listing</h3>
+          <p>Autoindex is enabled for <code>/kapouet</code> &mdash; browse the generated file listing.</p>
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Server Info</h2>
+      <p>
+        Built in C++17 &middot; single-process, non-blocking <code>epoll</code> event loop &middot;
+        virtual hosting &middot; configurable routes &middot; CGI lifecycle management.
+        Hello from Krak&oacute;w!
+      </p>
+    </div>
+  </main>
 </body>
 </html>

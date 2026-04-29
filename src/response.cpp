@@ -1,11 +1,40 @@
 #include "response.hpp"
 #include <cstdio>
 
+std::string
+Response::mimeFromPath(const std::string &path) {
+    static const std::pair<const char *, const char *> types[] = {
+        {".html", "text/html; charset=utf-8"},
+        {".htm",  "text/html; charset=utf-8"},
+        {".css",  "text/css"},
+        {".js",   "application/javascript"},
+        {".json", "application/json"},
+        {".txt",  "text/plain; charset=utf-8"},
+        {".png",  "image/png"},
+        {".jpg",  "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".gif",  "image/gif"},
+        {".ico",  "image/x-icon"},
+        {".svg",  "image/svg+xml"},
+        {".pdf",  "application/pdf"},
+        {".py",   "text/x-python"},
+    };
+    size_t dot = path.rfind('.');
+    if (dot != std::string::npos) {
+        std::string ext = path.substr(dot);
+        for (const auto &[e, mime] : types)
+            if (ext == e) return mime;
+    }
+    return "application/octet-stream";
+}
+
 void
 Response::finalizeResponse(ResponseState &resp, const std::string &path, size_t bodySize, bool isConKeepAlive, const std::string &session_cookie) {
 	resp.addHeader("date", Response::getHttpDate());
-	resp.addHeader("server", "Webserv/ver 1.0");
+	resp.addHeader("server", "Webserv/1.0");
 	resp.addHeader("content-length", std::to_string(bodySize));
+	if (bodySize > 0 && resp.headers.find("content-type") == resp.headers.end())
+		resp.addHeader("content-type", "text/html; charset=utf-8");
 	if (isConKeepAlive)
 		resp.addHeader("connection", "keep-alive");
 	else
@@ -57,19 +86,27 @@ Response::build(const ResponseState &resp) {
 std::string
 Response::getStatusText(int code) {
 	switch (code) {
+	case 200: return "OK";
+	case 201: return "Created";
+	case 204: return "No Content";
+	case 301: return "Moved Permanently";
+	case 302: return "Found";
+	case 307: return "Temporary Redirect";
+	case 308: return "Permanent Redirect";
+	case 400: return "Bad Request";
 	case 403: return "Forbidden";
 	case 404: return "Not Found";
-	case 500: return "Internal Server Error";
-	case 200: return "OK";
-	case 400: return "Bad Request";
 	case 405: return "Method Not Allowed";
 	case 408: return "Request Timeout";
 	case 413: return "Payload Too Large";
-	case 414: return "URl Too Long";
-	case 301: return "Moved Permanently";
-	case 201: return "Created";
-	case 204: return "No Content";
-	default: return "Error";
+	case 414: return "URI Too Long";
+	case 431: return "Request Header Fields Too Large";
+	case 500: return "Internal Server Error";
+	case 502: return "Bad Gateway";
+	case 503: return "Service Unavailable";
+	case 504: return "Gateway Timeout";
+	case 505: return "HTTP Version Not Supported";
+	default:  return "Internal Server Error";
 	}
 }
 

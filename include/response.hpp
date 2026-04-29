@@ -42,4 +42,5 @@ namespace Response {
     std::string     encodeChunk(const std::string &data); // one frame, no terminal chunk
 	std::string		getHttpDate();
 	std::string		getStatusText(int code);
+	std::string		mimeFromPath(const std::string &path);
 };

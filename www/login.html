@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — webserv</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    main { max-width: 420px; }
+    .card { margin-top: 2.5rem; }
+    .footer-link { text-align: center; margin-top: 1rem; font-size: 0.88rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="brand">&#9670; webserv</a>
+    <a href="/">Home</a>
+    <a href="/upload.html">Upload</a>
+    <a href="/login.html" class="active">Login</a>
+    <a href="/cgi/stream.py">Stream</a>
+  </nav>
+
+  <main>
+    <div class="card">
+      <h2>&#128274; Sign In</h2>
+      <p>Demo credentials are stored in <code>cgi/users.json</code>.</p>
+
+      <form method="POST" action="/cgi/login.py">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" placeholder="e.g. alice" required autofocus>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="password" required>
+        </div>
+        <button type="submit" class="btn" style="width:100%">Sign In</button>
+      </form>
+
+      <p class="footer-link">Try: <strong>alice / hunter2</strong> &nbsp;|&nbsp; <strong>bob / letmein</strong> &nbsp;|&nbsp; <strong>carol / qwerty</strong></p>
+    </div>
+  </main>
+</body>
+</html>

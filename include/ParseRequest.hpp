@@ -15,6 +15,7 @@ enum ParseResult {
 	NothingToRead,
 	Okay,
 	BadRequest,
+	UnsupportedVersion,
 };
 
 class ParseRequest {
