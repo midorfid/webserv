@@ -59,6 +59,10 @@ void Server::run(const std::string &cfg_file) {
 	struct epoll_event ev;
 
 	_vhosts = _ConfigParser.parse(cfg_file);
+	Logger::instance().init(
+		_ConfigParser.getGlobal().access_log,
+		_ConfigParser.getGlobal().error_log
+	);
 	if (_vhosts.empty()) {
 		logTime(ERRLOG, "Error: No server blocks in config.");
 		exit(EXIT_FAILURE);
@@ -448,6 +452,7 @@ void	Server::checkTimeouts() {
 void
 Server::cleanup() {
 	logTime(REGLOG, "Shutting down.");
+	Logger::instance().shutdown();
 	this->~Server();
 	exit(EXIT_SUCCESS);
 }

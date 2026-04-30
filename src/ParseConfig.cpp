@@ -27,11 +27,20 @@ ParseConfig::parse(const std::string &path) {
     std::vector<std::string_view> tokens_vec = TokenStream::buildTokens(_file_content);
     TokenStream tokens(tokens_vec);
 
+    _global = GlobalConfig{};
     std::vector<Config> vhosts;
     while (tokens.hasNext()) {
         auto token = tokens.next();
         if (token == "server") {
             vhosts.push_back(parseServerBlock(tokens));
+        } else if (token == "access_log") {
+            auto args = collectArguments(tokens);
+            if (args.size() != 1) throw std::runtime_error("access_log expects 1 argument");
+            _global.access_log = std::string(args[0]);
+        } else if (token == "error_log") {
+            auto args = collectArguments(tokens);
+            if (args.size() != 1) throw std::runtime_error("error_log expects 1 argument");
+            _global.error_log = std::string(args[0]);
         } else {
             throw std::runtime_error("Unexpected token in global scope: " + std::string(token));
         }

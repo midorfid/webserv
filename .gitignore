@@ -1,22 +1,30 @@
 .vscode
 
+# Build directories
 build/
+build_test/
 bin/
 *.o
 
+# CMake generated files
 cmake_install.cmake
 CMakeCache.txt
 CMakeFiles/
 Makefile
 
+# Compiled binary
 webserv
 
+# Log files (keep the directory itself via .gitkeep)
 var/log/*
-images/
 !var/log/.gitkeep
 
-test_image.jpg
+# GTest / CTest artifacts
+Testing/
+
+images/
 __pycache__/
+test_image.jpg
 test.txt
 input.bin
 

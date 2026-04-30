@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel any in-progress run on the same branch when a new push arrives
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Build + test matrix (g++ and clang++) ────────────────────────────────
+  build-and-test:
+    name: Test (${{ matrix.compiler.cxx }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false   # let both compilers finish even if one fails
+      matrix:
+        compiler:
+          - { cc: gcc,   cxx: g++     }
+          - { cc: clang, cxx: clang++ }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build gcc g++ clang
+
+      # Cache the googletest download so it is not re-fetched on every run.
+      # The cache key includes the compiler so ASan-instrumented objects are
+      # stored separately from the regular build.
+      - name: Cache FetchContent downloads
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: gtest-${{ matrix.compiler.cxx }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure (ASan + tests enabled)
+        env:
+          CC:  ${{ matrix.compiler.cc }}
+          CXX: ${{ matrix.compiler.cxx }}
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DENABLE_ASAN=ON \
+            -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        env:
+          # Abort immediately on first leak or undefined-behaviour hit so the
+          # log shows the stack trace rather than a wall of errors.
+          ASAN_OPTIONS:  detect_leaks=1:abort_on_error=1:print_stats=1
+          UBSAN_OPTIONS: print_stacktrace=1:abort_on_error=1
+        run: ctest --test-dir build --output-on-failure
+
+  # ── Static analysis (clang-tidy) ─────────────────────────────────────────
+  static-analysis:
+    name: Clang-Tidy
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build clang clang-tidy
+
+      - name: Configure (export compile commands)
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      # Build first so that any generated headers exist before tidy runs
+      - name: Build
+        run: cmake --build build
+
+      - name: Run clang-tidy
+        # continue-on-error: true lets the pipeline stay green while you
+        # iteratively clean up warnings.  Flip to false once the codebase
+        # is fully tidy-clean.
+        continue-on-error: true
+        run: |
+          clang-tidy \
+            -p build \
+            --config-file=.clang-tidy \
+            $(find src -name '*.cpp' ! -name 'main.cpp')

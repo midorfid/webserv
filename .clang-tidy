@@ -1,0 +1,32 @@
+# Checks applied to the webserv codebase.
+#
+# Philosophy: start with a high-signal, low-noise set.  Checks that produce
+# excessive false-positives on Linux POSIX code are explicitly disabled.
+# Tighten the disabled list over time as the codebase matures.
+
+Checks: >
+  clang-analyzer-*,
+  bugprone-*,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-default-member-init,
+  modernize-avoid-bind,
+  modernize-use-emplace,
+  performance-unnecessary-copy-initialization,
+  performance-unnecessary-value-param,
+  readability-redundant-string-cstr,
+  readability-container-size-empty,
+  -bugprone-easily-swappable-parameters,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+
+# Treat no check as a hard error yet — keep the pipeline green while the
+# codebase is iteratively cleaned up.  Flip specific checks here once fixed.
+WarningsAsErrors: ''
+
+# Only report diagnostics for headers under our own include/ directory;
+# suppress noise from system headers and googletest internals.
+HeaderFilterRegex: '^.*/include/.*$'
+
+CheckOptions:
+  - key:   modernize-use-default-member-init.UseAssignment
+    value: '1'

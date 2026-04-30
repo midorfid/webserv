@@ -32,8 +32,12 @@ struct ResolvedAction {
 
 class RouteRequest {
     public:
-        ResolvedAction	resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req, const std::string &client_ip);
-    
+        ResolvedAction	    resolveRequestToHandler(const Config &serv_cfg, const HttpRequest &req, const std::string &client_ip);
+
+        // Pure-logic helpers exposed for unit testing
+        const Location      *findBestLocationMatch(const Config &serv_cfg, std::string_view url);
+        bool                checkLimitExcept(const std::string &method, const Location &loc);
+        void                setActionType(ResolvedAction &action, const std::string &met);
 
 	private:
 
@@ -41,8 +45,6 @@ class RouteRequest {
 		ResolvedAction		resolveRedirect(const std::string &dir_path, ResolvedAction &action, int status_code = 301);
 		bool				NoSlash(std::string_view str);
 		ResolvedAction		PathFinder(const HttpRequest &req, const Location &loc, const Config &serv_cfg, ResolvedAction &action, const std::string &client_ip);
-		bool				checkLimitExcept(const std::string &method, const Location &loc);
-        const Location      *findBestLocationMatch(const Config &serv_cfg, std::string_view url);
         std::string			handlePath(const Config &serv_cfg, HttpRequest &req);
 		ResolvedAction		resolveErrorAction(int error_code, const Config &serv_cfg, ResolvedAction &action);
 		ResolvedAction		resolveFileAction(ResolvedAction &action);
@@ -53,7 +55,5 @@ class RouteRequest {
 								const std::vector<std::string> &indexes);
         ResolvedAction      checkReqPath(const Config &cfg, const Location *location, ResolvedAction &action);
         ResolvedAction      resolveCgiScript(const Config &serv_cfg, const HttpRequest &req, const Location &loc, ResolvedAction &action, const std::string &client_ip);
-		void				setActionType(ResolvedAction &action, const std::string &met);
 		ResolvedAction		resolveDeleteAction(ResolvedAction &action);
-		
 };
